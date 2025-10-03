@@ -1,0 +1,81 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Remove background from CSS, will be set inline in App.tsx */
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.card, .responsive-card {
+  background: #fff;
+  padding: 2.5rem 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  min-width: 320px;
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.card img, .responsive-card img {
+  height: 128px;
+  max-width: 90%;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(90,103,216,0.08);
+}
+
+@media (max-width: 700px) {
+  .card, .responsive-card {
+    padding: 1.5rem 0.5rem;
+    min-width: unset;
+    max-width: 98vw;
+    border-radius: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .card, .responsive-card {
+    padding: 1rem 0.2rem;
+    font-size: 15px;
+  }
+  table {
+    font-size: 13px;
+  }
+  th, td {
+    padding: 4px !important;
+  }
+  input, select, textarea, button {
+    font-size: 15px !important;
+  }
+}
+
+:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+[tabindex]:focus, button:focus, input:focus, select:focus, textarea:focus {
+  outline: 2px solid #43cea2;
+  outline-offset: 2px;
+}
+
+/* Visually hidden for a11y */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
+}
