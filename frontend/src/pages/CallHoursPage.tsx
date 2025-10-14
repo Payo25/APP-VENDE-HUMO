@@ -208,6 +208,10 @@ const CallHoursPage: React.FC = () => {
                       } else {
                         const thisDay = day;
                         const dateKey = getDateString(year, month, thisDay);
+<<<<<<< HEAD
+=======
+                        const assigned = assignments[dateKey] || [];
+>>>>>>> a9b8ac7f52883d2016780be38b535d54baf0b388
                         cells.push(
                           <td key={d} style={{ padding: 8, minHeight: 80, border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{thisDay}</div>
