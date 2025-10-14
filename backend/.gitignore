@@ -1,0 +1,12 @@
+node_modules/
+.env
+logs/
+*.log
+coverage/
+build/
+dist/
+*.pem
+*.key
+.DS_Store
+backend/node_modules
+frontend/node_modules
