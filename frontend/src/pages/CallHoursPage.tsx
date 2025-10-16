@@ -207,12 +207,8 @@ const CallHoursPage: React.FC = () => {
                         cells.push(<td key={d} style={{ padding: 8, minHeight: 80, background: '#f6f8fa' }} />);
                       } else {
                         const thisDay = day;
-                        const dateKey = getDateString(year, month, thisDay);
-<<<<<<< HEAD
-=======
-                        const assigned = assignments[dateKey] || [];
->>>>>>> a9b8ac7f52883d2016780be38b535d54baf0b388
-                        cells.push(
+const dateKey = getDateString(year, month, thisDay);
+cells.push(
                           <td key={d} style={{ padding: 8, minHeight: 80, border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{thisDay}</div>
                             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
