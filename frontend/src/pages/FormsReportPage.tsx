@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { saveAs } from 'file-saver';
 
 const API_BASE_URL = '/api';
 const FORMS_API_URL = `${API_BASE_URL}/forms`;
@@ -102,6 +101,12 @@ const FormsReportPage: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="responsive-card" style={{ maxWidth: 1100, width: '100%' }}>
+                {loading ? (
+                  <div style={{ textAlign: 'center', padding: '20px' }}>Loading forms...</div>
+                ) : error ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#e74c3c' }}>{error}</div>
+                ) : (
+                  <>
                 <a
           href="/dashboard"
           style={{
@@ -211,6 +216,8 @@ const FormsReportPage: React.FC = () => {
             </button>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
