@@ -2,7 +2,7 @@ require('dotenv').config();
 const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render') ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('azure') ? { rejectUnauthorized: true } : false
 });
 
 const express = require('express');
@@ -423,8 +423,12 @@ app.listen(PORT, () => {
     });
   }
 });
-/ /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   l i s t a  
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a  
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a  
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a  
+/ /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   l i s t a 
+ 
+ / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
+ 
+ / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
+ 
+ / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
+ 
  
