@@ -6,7 +6,6 @@ on:
       - main
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -39,13 +38,10 @@ jobs:
           rm -rf backend/build
           cp -R frontend/build backend/
 
-      - name: Azure Login with Managed Identity
+      - name: Azure Login with Service Principal
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          auth-type: IDENTITY
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
