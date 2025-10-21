@@ -48,4 +48,3 @@ jobs:
         with:
           app-name: surgical-backend
           package: backend
-          startup-command: "node backend/index.js"
