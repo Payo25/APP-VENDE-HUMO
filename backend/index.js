@@ -20,6 +20,26 @@ app.use(express.json());
 // Log all environment variables at startup for debugging
 // console.log('ENV VARS:', process.env);
 
+// Database health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW() as time, current_database() as db');
+    const userCheck = await pool.query('SELECT COUNT(*) as count FROM users');
+    res.json({ 
+      status: 'ok', 
+      database: result.rows[0],
+      userCount: userCheck.rows[0].count,
+      hasEnvVar: !!process.env.DATABASE_URL
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'error', 
+      message: error.message,
+      hasEnvVar: !!process.env.DATABASE_URL
+    });
+  }
+});
+
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
