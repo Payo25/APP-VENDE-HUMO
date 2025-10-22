@@ -10,12 +10,14 @@ const pool = new Pool({
 
 async function initDatabase() {
   try {
+    console.log('🔄 Initializing database...');
+    
     // Read the schema file
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
     
     // Execute the schema
     await pool.query(schema);
-    console.log('Database schema created successfully');
+    console.log('✅ Database schema created successfully');
 
     // Create an admin user if it doesn't exist
     const adminPassword = await require('bcryptjs').hash('admin123', 10);
@@ -25,10 +27,15 @@ async function initDatabase() {
       ON CONFLICT (username) DO NOTHING
     `, ['admin@example.com', adminPassword, 'Admin User', 'Admin']);
     
-    console.log('Admin user created successfully');
+    console.log('✅ Admin user created successfully');
+    console.log('   Email: admin@example.com');
+    console.log('   Password: admin123');
+    
+    await pool.end();
     process.exit(0);
   } catch (err) {
-    console.error('Error initializing database:', err);
+    console.error('❌ Error initializing database:', err.message);
+    console.error(err);
     process.exit(1);
   }
 }
