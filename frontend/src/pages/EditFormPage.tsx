@@ -202,8 +202,8 @@ const EditFormPage: React.FC = () => {
               </div>
             )}
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Update Surgery Form Image</label>
-              <input type="file" accept="image/*" onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)} />
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Update Surgery Form (Image or PDF)</label>
+              <input type="file" accept="image/*,.pdf,application/pdf" onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)} />
             </div>
             <p style={{ color: '#888', fontSize: 13 }}><b>Created By:</b> {form.createdByFullName || form.createdBy}</p>
             <p style={{ color: '#888', fontSize: 13 }}><b>Created By Email:</b> {form.createdByEmail || ''}</p>

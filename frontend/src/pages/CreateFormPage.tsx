@@ -245,10 +245,10 @@ const CreateFormPage: React.FC = () => {
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Surgery Form (Image Upload)</label>
+            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Surgery Form (Image or PDF Upload)</label>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.pdf,application/pdf"
               onChange={e => setSurgeryFormFile(e.target.files ? e.target.files[0] : null)}
               required
               style={{ width: '100%', padding: '10px 0', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box', background: '#fff' }}
