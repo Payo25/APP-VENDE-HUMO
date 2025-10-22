@@ -2,7 +2,7 @@ require('dotenv').config();
 const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('azure') ? { rejectUnauthorized: true } : false
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render') ? { rejectUnauthorized: false } : false
 });
 
 const express = require('express');
@@ -23,7 +23,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve frontend static build
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+app.use(express.static(path.join(__dirname, 'build')));
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
@@ -397,9 +397,9 @@ app.get(/(.*)/, (req, res) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
     return res.status(404).json({ error: 'Not found' });
   }
-  const indexPath = path.join(__dirname, '../frontend/build/index.html');
+  const indexPath = path.join(__dirname, 'build/index.html');
   if (!fs.existsSync(indexPath)) {
-    console.error('ERROR: frontend/build/index.html not found. Make sure the frontend is built before starting the backend.');
+    console.error('ERROR: build/index.html not found. Make sure the frontend is built before starting the backend.');
     return res.status(500).send('Frontend build not found. Please run "npm run build" in the frontend directory.');
   }
   res.sendFile(indexPath);
@@ -423,12 +423,3 @@ app.listen(PORT, () => {
     });
   }
 });
-/ /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   l i s t a 
- 
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
- 
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
- 
- / /   A c t i v a n d o   l o g i n   c o n   i d e n t i d a d   c o r r e g i d a 
- 
- 
