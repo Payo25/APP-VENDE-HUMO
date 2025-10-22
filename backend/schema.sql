@@ -9,6 +9,16 @@ CREATE TABLE IF NOT EXISTS users (
     lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create health_centers table
+CREATE TABLE IF NOT EXISTS health_centers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    address TEXT,
+    phone VARCHAR(50),
+    createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create forms table
 CREATE TABLE IF NOT EXISTS forms (
     id SERIAL PRIMARY KEY,
@@ -28,3 +38,19 @@ CREATE TABLE IF NOT EXISTS forms (
     createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Create audit_logs table
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    action VARCHAR(100) NOT NULL,
+    actor VARCHAR(255) NOT NULL,
+    details JSONB
+);
+
+-- Insert default health centers
+INSERT INTO health_centers (name, address, phone) VALUES
+    ('General Hospital', '123 Main St', '555-0100'),
+    ('City Medical Center', '456 Oak Ave', '555-0200'),
+    ('Regional Surgery Center', '789 Pine Rd', '555-0300')
+ON CONFLICT (name) DO NOTHING;

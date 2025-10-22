@@ -147,13 +147,14 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO forms (patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, surgeryFormFileUrl, createdAt)
+      `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, `/uploads/${req.file.filename}`, new Date().toISOString()]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Database error' });
+    console.error('Error creating form:', err);
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
