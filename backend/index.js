@@ -1,8 +1,9 @@
 require('dotenv').config();
 const { Pool } = require('pg');
+// Database connection pool for Azure PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render') ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('azure') ? { rejectUnauthorized: true } : false
 });
 
 const express = require('express');
