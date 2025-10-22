@@ -289,12 +289,19 @@ function logAudit(action, actor, details) {
 // --- Login API ---
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  console.log('Login attempt:', username);
   if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
   try {
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    console.log('User query result:', result.rows.length, 'rows');
     const user = result.rows[0];
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      console.log('User not found:', username);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    console.log('User found, checking password...');
     const match = await bcrypt.compare(password, user.password);
+    console.log('Password match:', match);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
     logAudit('LOGIN', username, { userId: user.id });
     res.json({ id: user.id, username: user.username, role: user.role, fullName: user.fullname || user.fullName });
