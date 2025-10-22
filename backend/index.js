@@ -48,9 +48,9 @@ app.use(express.static(path.join(__dirname, 'build')));
 
 // Multer setup for file uploads
 // Ensure uploads directory exists at startup
-// Use Azure's local storage path which has write permissions
-const uploadDir = process.env.HOME 
-  ? path.join(process.env.HOME, 'site', 'wwwroot', 'uploads')
+// Use Azure's TEMP directory which always has write permissions
+const uploadDir = process.env.TEMP 
+  ? path.join(process.env.TEMP, 'uploads')
   : path.join(__dirname, 'uploads');
 
 try {
@@ -60,8 +60,13 @@ try {
   } else {
     console.log('✅ Uploads directory exists:', uploadDir);
   }
+  // Test write permissions
+  const testFile = path.join(uploadDir, 'test.txt');
+  fs.writeFileSync(testFile, 'test');
+  fs.unlinkSync(testFile);
+  console.log('✅ Uploads directory is writable');
 } catch (err) {
-  console.error('❌ Error creating uploads directory:', err);
+  console.error('❌ Error with uploads directory:', err.message);
 }
 
 const storage = multer.diskStorage({
