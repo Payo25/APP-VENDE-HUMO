@@ -8,6 +8,9 @@
     "start": "node index.js",
     "init-db": "node init-db.js"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
