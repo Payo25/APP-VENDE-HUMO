@@ -137,20 +137,43 @@ app.get('/api/forms/:id', async (req, res) => {
 });
 
 app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
+  console.log('=== Form submission received ===');
+  console.log('Body:', req.body);
+  console.log('File:', req.file);
+  
   const {
     patientName, dob, insuranceCompany,
     healthCenterName, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, date
   } = req.body;
+  
   // Validate required fields
   if (!patientName || !dob || !insuranceCompany || !healthCenterName || !date || !doctorName || !procedure || !caseType || !status || !createdByUserId || !req.file || (caseType !== 'Cancelled' && (!timeIn || !timeOut))) {
+    console.log('Validation failed:', {
+      patientName: !!patientName,
+      dob: !!dob,
+      insuranceCompany: !!insuranceCompany,
+      healthCenterName: !!healthCenterName,
+      date: !!date,
+      doctorName: !!doctorName,
+      procedure: !!procedure,
+      caseType: !!caseType,
+      status: !!status,
+      createdByUserId: !!createdByUserId,
+      file: !!req.file,
+      timeIn: !!timeIn,
+      timeOut: !!timeOut
+    });
     return res.status(400).json({ error: 'All fields are required.' });
   }
+  
   try {
+    console.log('Inserting into database...');
     const result = await pool.query(
       `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, `/uploads/${req.file.filename}`, new Date().toISOString()]
     );
+    console.log('Form created successfully:', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating form:', err);
