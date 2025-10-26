@@ -18,11 +18,13 @@
   "dependencies": {
     "@azure/storage-blob": "^12.24.0",
     "@google-cloud/firestore": "^7.11.1",
+    "@sendgrid/mail": "^8.1.6",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "multer": "^2.0.0",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "twilio": "^5.10.3"
   }
 }

@@ -13,11 +13,73 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
+const sgMail = require('@sendgrid/mail');
+const twilio = require('twilio');
 
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Configure SendGrid for email notifications
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid configured');
+} else {
+  console.warn('⚠️ SENDGRID_API_KEY not set, email notifications disabled');
+}
+
+// Configure Twilio for SMS notifications
+let twilioClient;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  console.log('✅ Twilio configured');
+} else {
+  console.warn('⚠️ Twilio credentials not set, SMS notifications disabled');
+}
+
+// Helper function to send email notification
+async function sendEmailNotification(subject, message) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.NOTIFICATION_EMAIL_TO) {
+    console.log('Email notification skipped (not configured)');
+    return;
+  }
+  
+  try {
+    const msg = {
+      to: process.env.NOTIFICATION_EMAIL_TO.split(','), // Can send to multiple emails
+      from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+      subject: subject,
+      html: message,
+    };
+    await sgMail.send(msg);
+    console.log('✅ Email notification sent');
+  } catch (error) {
+    console.error('❌ Email notification failed:', error.message);
+  }
+}
+
+// Helper function to send SMS notification
+async function sendSMSNotification(message) {
+  if (!twilioClient || !process.env.NOTIFICATION_PHONE_TO || !process.env.TWILIO_PHONE_FROM) {
+    console.log('SMS notification skipped (not configured)');
+    return;
+  }
+  
+  try {
+    const phoneNumbers = process.env.NOTIFICATION_PHONE_TO.split(',');
+    for (const phoneNumber of phoneNumbers) {
+      await twilioClient.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE_FROM,
+        to: phoneNumber.trim()
+      });
+    }
+    console.log('✅ SMS notification sent');
+  } catch (error) {
+    console.error('❌ SMS notification failed:', error.message);
+  }
+}
 
 // Log all environment variables at startup for debugging
 // console.log('ENV VARS:', process.env);
@@ -451,7 +513,10 @@ app.post('/api/call-hours', async (req, res) => {
       'SELECT 1 FROM call_hours WHERE month = $1 AND year = $2',
       [Number(month), Number(year)]
     );
-    if (exists.rows.length > 0) {
+    
+    const isUpdate = exists.rows.length > 0;
+    
+    if (isUpdate) {
       await pool.query(
         'UPDATE call_hours SET assignments = $1 WHERE month = $2 AND year = $3',
         [assignments, Number(month), Number(year)]
@@ -462,8 +527,38 @@ app.post('/api/call-hours', async (req, res) => {
         [Number(month), Number(year), assignments]
       );
     }
+    
+    // Send notifications for new schedules
+    if (!isUpdate) {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthName = monthNames[Number(month) - 1];
+      
+      // Parse assignments to get user details
+      const assignmentData = typeof assignments === 'string' ? JSON.parse(assignments) : assignments;
+      const assignedDays = Object.keys(assignmentData).length;
+      
+      // Email notification
+      const emailSubject = `New Call Schedule Added: ${monthName} ${year}`;
+      const emailMessage = `
+        <h2>New Call Schedule Created</h2>
+        <p>A new call schedule has been added for <strong>${monthName} ${year}</strong>.</p>
+        <p><strong>Total days scheduled:</strong> ${assignedDays}</p>
+        <p>Please log in to the Surgical Forms app to view the complete schedule.</p>
+        <p><a href="${process.env.APP_URL || 'https://surgical-backend-abdma0d0fpdme6e8.canadacentral-01.azurewebsites.net'}">View Schedule</a></p>
+      `;
+      
+      // SMS notification
+      const smsMessage = `New call schedule added for ${monthName} ${year}. ${assignedDays} days scheduled. Check the Surgical Forms app for details.`;
+      
+      // Send notifications asynchronously (don't wait for them)
+      sendEmailNotification(emailSubject, emailMessage).catch(console.error);
+      sendSMSNotification(smsMessage).catch(console.error);
+    }
+    
     res.json({ success: true });
   } catch (err) {
+    console.error('Error in call-hours endpoint:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });
