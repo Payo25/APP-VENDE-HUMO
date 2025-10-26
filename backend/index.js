@@ -11,9 +11,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { MulterAzureStorage } = require('multer-azure-blob-storage');
 
 
 const app = express();
@@ -48,20 +46,23 @@ app.use(express.static(path.join(__dirname, 'build')));
 
 // Azure Blob Storage setup for file uploads
 const azureStorageConnectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+let blobServiceClient;
+let containerClient;
 
-if (!azureStorageConnectionString) {
+if (azureStorageConnectionString) {
+  try {
+    blobServiceClient = BlobServiceClient.fromConnectionString(azureStorageConnectionString);
+    containerClient = blobServiceClient.getContainerClient('uploads');
+    console.log('✅ Azure Blob Storage configured');
+  } catch (err) {
+    console.error('❌ Error configuring Azure Blob Storage:', err.message);
+  }
+} else {
   console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not set, file uploads will fail');
 }
 
-const azureStorage = new MulterAzureStorage({
-  connectionString: azureStorageConnectionString,
-  containerName: 'uploads',
-  blobName: function (req, file) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    return uniqueSuffix + '-' + file.originalname;
-  },
-  containerAccessLevel: 'blob', // Public read access
-});
+// Use memory storage for multer (files will be in memory temporarily)
+const storage = multer.memoryStorage();
 
 // File filter to accept images and PDFs
 const fileFilter = (req, file, cb) => {
@@ -81,10 +82,30 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ 
-  storage: azureStorage,
+  storage: storage,
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
+
+// Helper function to upload file to Azure Blob Storage
+async function uploadToBlob(file) {
+  if (!containerClient) {
+    throw new Error('Azure Blob Storage not configured');
+  }
+  
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  const blobName = uniqueSuffix + '-' + file.originalname;
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+  
+  await blockBlobClient.uploadData(file.buffer, {
+    blobHTTPHeaders: {
+      blobContentType: file.mimetype
+    }
+  });
+  
+  return blockBlobClient.url;
+}
+
 
 // --- Forms API using PostgreSQL ---
 app.get('/api/forms', async (req, res) => {
@@ -193,9 +214,12 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   }
   
   try {
+    console.log('Uploading file to Azure Blob Storage...');
+    // Upload file to Azure Blob Storage and get URL
+    const fileUrl = await uploadToBlob(req.file);
+    console.log('File uploaded to:', fileUrl);
+    
     console.log('Inserting into database...');
-    // Get the blob URL from Azure Storage
-    const fileUrl = req.file.url || req.file.path;
     const result = await pool.query(
       `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
@@ -236,9 +260,9 @@ app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => 
     let paramCount = fields.length;
     // If a new file is uploaded, update surgeryFormFileUrl
     if (req.file) {
+      const fileUrl = await uploadToBlob(req.file);
       paramCount++;
       setClause += (setClause ? ', ' : '') + `surgeryformfileurl = $${paramCount}`;
-      const fileUrl = req.file.url || req.file.path;
       values.push(fileUrl);
     }
     // Always update lastModified
