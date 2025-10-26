@@ -12,7 +12,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { BlobServiceClient } = require('@azure/storage-blob');
+const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
 
 
 const app = express();
@@ -88,7 +88,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// Helper function to upload file to Azure Blob Storage
+// Helper function to upload file to Azure Blob Storage and return SAS URL
 async function uploadToBlob(file) {
   if (!containerClient) {
     throw new Error('Azure Blob Storage not configured');
@@ -104,7 +104,19 @@ async function uploadToBlob(file) {
     }
   });
   
-  return blockBlobClient.url;
+  // Generate SAS token for the blob (valid for 10 years)
+  const sasToken = generateBlobSASQueryParameters({
+    containerName: 'uploads',
+    blobName: blobName,
+    permissions: BlobSASPermissions.parse('r'), // read permission
+    startsOn: new Date(),
+    expiresOn: new Date(new Date().valueOf() + 315360000000) // 10 years
+  }, new StorageSharedKeyCredential(
+    blobServiceClient.accountName,
+    process.env.AZURE_STORAGE_CONNECTION.split('AccountKey=')[1].split(';')[0]
+  )).toString();
+  
+  return `${blockBlobClient.url}?${sasToken}`;
 }
 
 
