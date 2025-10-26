@@ -40,12 +40,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Serve frontend static build
-app.use(express.static(path.join(__dirname, 'build')));
-
 // Multer setup for file uploads
 // Ensure uploads directory exists at startup
 // Use Azure's TEMP directory which always has write permissions
@@ -68,6 +62,12 @@ try {
 } catch (err) {
   console.error('❌ Error with uploads directory:', err.message);
 }
+
+// Serve uploaded files statically from the TEMP directory
+app.use('/uploads', express.static(uploadDir));
+
+// Serve frontend static build
+app.use(express.static(path.join(__dirname, 'build')));
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
