@@ -46,7 +46,7 @@ app.get('/api/health', async (req, res) => {
 app.use(express.static(path.join(__dirname, 'build')));
 
 // Azure Blob Storage setup for file uploads
-const azureStorageConnectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const azureStorageConnectionString = process.env.AZURE_STORAGE_CONNECTION;
 let blobServiceClient;
 let containerClient;
 
@@ -59,7 +59,7 @@ if (azureStorageConnectionString) {
     console.error('❌ Error configuring Azure Blob Storage:', err.message);
   }
 } else {
-  console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not set, file uploads will fail');
+  console.warn('⚠️ AZURE_STORAGE_CONNECTION not set, file uploads will fail');
 }
 
 // Use memory storage for multer (files will be in memory temporarily)
