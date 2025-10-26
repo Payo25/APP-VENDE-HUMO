@@ -216,6 +216,9 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   
   try {
     console.log('Uploading file to Azure Blob Storage...');
+    console.log('Container client exists:', !!containerClient);
+    console.log('File details:', { name: req.file.originalname, size: req.file.size, type: req.file.mimetype });
+    
     // Upload file to Azure Blob Storage and get URL
     const fileUrl = await uploadToBlob(req.file);
     console.log('File uploaded to:', fileUrl);
@@ -230,7 +233,8 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating form:', err);
-    res.status(500).json({ error: 'Database error', details: err.message });
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ error: 'Failed to create form', details: err.message, stack: err.stack });
   }
 });
 
