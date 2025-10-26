@@ -12,6 +12,9 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { BlobServiceClient } = require('@azure/storage-blob');
+const { MulterAzureStorage } = require('multer-azure-blob-storage');
+
 
 const app = express();
 app.use(cors());
@@ -40,51 +43,24 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Multer setup for file uploads
-// Ensure uploads directory exists at startup
-// Use Azure's TEMP directory which always has write permissions
-const uploadDir = process.env.TEMP 
-  ? path.join(process.env.TEMP, 'uploads')
-  : path.join(__dirname, 'uploads');
-
-try {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log('✅ Created uploads directory:', uploadDir);
-  } else {
-    console.log('✅ Uploads directory exists:', uploadDir);
-  }
-  // Test write permissions
-  const testFile = path.join(uploadDir, 'test.txt');
-  fs.writeFileSync(testFile, 'test');
-  fs.unlinkSync(testFile);
-  console.log('✅ Uploads directory is writable');
-} catch (err) {
-  console.error('❌ Error with uploads directory:', err.message);
-}
-
-// Serve uploaded files statically from the TEMP directory
-app.use('/uploads', express.static(uploadDir));
-
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, 'build')));
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    try {
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      cb(null, uploadDir);
-    } catch (err) {
-      console.error('Error in multer destination:', err);
-      cb(err);
-    }
-  },
-  filename: function (req, file, cb) {
+// Azure Blob Storage setup for file uploads
+const azureStorageConnectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+
+if (!azureStorageConnectionString) {
+  console.warn('⚠️ AZURE_STORAGE_CONNECTION_STRING not set, file uploads will fail');
+}
+
+const azureStorage = new MulterAzureStorage({
+  connectionString: azureStorageConnectionString,
+  containerName: 'uploads',
+  blobName: function (req, file) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
+    return uniqueSuffix + '-' + file.originalname;
+  },
+  containerAccessLevel: 'blob', // Public read access
 });
 
 // File filter to accept images and PDFs
@@ -105,7 +81,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ 
-  storage: storage,
+  storage: azureStorage,
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
@@ -218,10 +194,12 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   
   try {
     console.log('Inserting into database...');
+    // Get the blob URL from Azure Storage
+    const fileUrl = req.file.url || req.file.path;
     const result = await pool.query(
       `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, `/uploads/${req.file.filename}`, new Date().toISOString()]
+      [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
     console.log('Form created successfully:', result.rows[0]);
     res.status(201).json(result.rows[0]);
@@ -260,7 +238,8 @@ app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => 
     if (req.file) {
       paramCount++;
       setClause += (setClause ? ', ' : '') + `surgeryformfileurl = $${paramCount}`;
-      values.push(`/uploads/${req.file.filename}`);
+      const fileUrl = req.file.url || req.file.path;
+      values.push(fileUrl);
     }
     // Always update lastModified
     paramCount++;

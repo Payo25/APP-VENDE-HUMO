@@ -16,12 +16,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@azure/storage-blob": "^12.24.0",
     "@google-cloud/firestore": "^7.11.1",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "multer": "^2.0.0",
+    "multer-azure-blob-storage": "^1.2.1",
     "pg": "^8.16.0"
   }
 }
