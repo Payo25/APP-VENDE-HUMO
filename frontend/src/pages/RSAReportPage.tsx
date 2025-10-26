@@ -154,8 +154,9 @@ const PayrollPage: React.FC = () => {
       });
       // Add totals row for this RSA
       csv += `"${rsa.fullName || rsa.username}",Total,,${totalCallHour},${totalShiftLT3},${totalShiftGT3},${totalVoluntary},${totalCancelled}\n`;
-      // Add payment row for this RSA
-      const callHourPay = totalCallHour * 3;
+      // Add payment row for this RSA - use user's hourly rate
+      const hourlyRate = rsa.hourlyRate || 3.00;
+      const callHourPay = totalCallHour * hourlyRate;
       const shiftLT3Pay = totalShiftLT3 * 100;
       const shiftGT3Pay = totalShiftGT3 * 150;
       const voluntaryPay = totalVoluntary * 150;
@@ -222,8 +223,9 @@ const PayrollPage: React.FC = () => {
         const totalShiftGT3 = rows.reduce((sum, r) => sum + r.shiftGT3, 0);
         const totalVoluntary = rows.reduce((sum, r) => sum + r.voluntary, 0);
         const totalCancelled = rows.reduce((sum, r) => sum + r.cancelled, 0);
-        // Payment calculations
-        const callHourPay = totalCallHour * 3;
+        // Payment calculations - use user's hourly rate
+        const hourlyRate = rsa.hourlyRate || 3.00;
+        const callHourPay = totalCallHour * hourlyRate;
         const shiftLT3Pay = totalShiftLT3 * 100;
         const shiftGT3Pay = totalShiftGT3 * 150;
         const voluntaryPay = totalVoluntary * 150;

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     fullname VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL,
+    hourly_rate DECIMAL(10,2) DEFAULT 3.00,
     createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,6 +47,17 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     action VARCHAR(100) NOT NULL,
     actor VARCHAR(255) NOT NULL,
     details JSONB
+);
+
+-- Create call_hours table for monthly planner
+CREATE TABLE IF NOT EXISTS call_hours (
+    id SERIAL PRIMARY KEY,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    assignments JSONB NOT NULL,
+    createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(month, year)
 );
 
 -- Insert default health centers

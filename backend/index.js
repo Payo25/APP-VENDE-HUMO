@@ -293,13 +293,14 @@ app.delete('/api/forms/:id', async (req, res) => {
 // --- Users API using PostgreSQL ---
 app.get('/api/users', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, username, role, fullname FROM users ORDER BY id DESC');
+    const result = await pool.query('SELECT id, username, role, fullname, hourly_rate FROM users ORDER BY id DESC');
     // Map fullname to fullName for frontend compatibility and remove raw fullname
     const users = result.rows.map(user => ({
       id: user.id,
       username: user.username,
       role: user.role,
-      fullName: user.fullname
+      fullName: user.fullname,
+      hourlyRate: user.hourly_rate || 3.00
     }));
     res.json(users);
   } catch (err) {
@@ -325,15 +326,16 @@ app.post('/api/users', async (req, res) => {
 });
 
 app.put('/api/users/:id', async (req, res) => {
-  const { role, fullName, username } = req.body;
+  const { role, fullName, username, hourlyRate } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE users SET role = $1, fullName = $2, username = $3 WHERE id = $4 RETURNING id, username, role, fullName',
-      [role, fullName, username, req.params.id]
+      'UPDATE users SET role = $1, fullname = $2, username = $3, hourly_rate = $4 WHERE id = $5 RETURNING id, username, role, fullname, hourly_rate',
+      [role, fullName, username, hourlyRate || 3.00, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {
+    console.error('Error updating user:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });

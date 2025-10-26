@@ -18,6 +18,7 @@ const UserManagementPage: React.FC = () => {
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editHourlyRate, setEditHourlyRate] = useState('3.00');
   const [changingPasswordUser, setChangingPasswordUser] = useState<any>(null);
   const [newPassword, setNewPassword] = useState('');
   const [retypePassword, setRetypePassword] = useState('');
@@ -102,6 +103,7 @@ const UserManagementPage: React.FC = () => {
     setEditFullName(user.fullName || '');
     setEditEmail(user.username || '');
     setEditRole(user.role || '');
+    setEditHourlyRate(user.hourlyRate?.toString() || '3.00');
   };
 
   const handleEditUser = async (e: React.FormEvent) => {
@@ -110,10 +112,22 @@ const UserManagementPage: React.FC = () => {
     const res = await fetch(`${API_URL}/${editingUser.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: editRole, fullName: editFullName, username: editEmail, actor: localStorage.getItem('user') }),
+      body: JSON.stringify({ 
+        role: editRole, 
+        fullName: editFullName, 
+        username: editEmail, 
+        hourlyRate: parseFloat(editHourlyRate) || 3.00,
+        actor: localStorage.getItem('user') 
+      }),
     });
     if (res.ok) {
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, role: editRole, fullName: editFullName, username: editEmail } : u));
+      setUsers(users.map(u => u.id === editingUser.id ? { 
+        ...u, 
+        role: editRole, 
+        fullName: editFullName, 
+        username: editEmail,
+        hourlyRate: parseFloat(editHourlyRate) 
+      } : u));
       setEditingUser(null);
     }
   };
@@ -350,6 +364,21 @@ const UserManagementPage: React.FC = () => {
                         <option value="Registered Surgical Assistant">Registered Surgical Assistant</option>
                       </select>
                     </div>
+                    {editRole === 'Registered Surgical Assistant' && (
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Hourly Rate ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editHourlyRate}
+                          onChange={e => setEditHourlyRate(e.target.value)}
+                          required
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        <small style={{ color: '#666', fontSize: 13 }}>Default is $3.00 per hour</small>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       <button type="button" onClick={() => setEditingUser(null)} style={{ padding: '8px 20px', borderRadius: 6, background: '#eee', color: '#2d3a4b', border: 'none', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Cancel</button>
                       <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Save</button>
