@@ -213,6 +213,31 @@ const FormsListPage: React.FC = () => {
                       >
                         👁
                       </button>
+                      {form.surgeryFormFileUrl && (
+                        <button
+                          onClick={() => {
+                            window.open(form.surgeryFormFileUrl, '_blank');
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: 6,
+                            background: 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 600,
+                            fontSize: 14,
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(17,153,142,0.08)',
+                            transition: 'background 0.2s',
+                            marginRight: 8
+                          }}
+                          tabIndex={0}
+                          aria-label={`Download form file for ${form.patientName}`}
+                          title="Download Surgery Form"
+                        >
+                          📥
+                        </button>
+                      )}
                       {(userRole === 'Registered Surgical Assistant' || userRole === 'Business Assistant') && (
                         <button
                           onClick={() => navigate(`/forms/${form.id}/edit`)}
