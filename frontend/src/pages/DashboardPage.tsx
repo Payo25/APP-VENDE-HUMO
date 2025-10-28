@@ -57,6 +57,7 @@ const DashboardPage: React.FC = () => {
           >
             View Surgical Forms
           </a>
+          {(localStorage.getItem('role') === 'Admin' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <a href="/forms/create" style={{
             display: 'inline-block',
             padding: '12px 0',
@@ -75,6 +76,7 @@ const DashboardPage: React.FC = () => {
           >
             Create New Surgical Form
           </a>
+          )}
           {localStorage.getItem('role') === 'Admin' && (
             <a href="/users" style={{
               display: 'inline-block',
@@ -115,7 +117,7 @@ const DashboardPage: React.FC = () => {
               Audit Logs
             </a>
           )}
-          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+          {localStorage.getItem('role') === 'Business Assistant' && (
             <a href="/rsa-report" style={{
               display: 'inline-block',
               padding: '12px 0',
@@ -135,7 +137,7 @@ const DashboardPage: React.FC = () => {
               Payroll
             </a>
           )}
-          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+          {localStorage.getItem('role') === 'Business Assistant' && (
             <a href="/forms-report" style={{
               display: 'inline-block',
               padding: '12px 0',
@@ -155,7 +157,7 @@ const DashboardPage: React.FC = () => {
               Surgical Forms Report
             </a>
           )}
-          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+          {localStorage.getItem('role') === 'Business Assistant' && (
             <a href="/health-centers" style={{
               display: 'inline-block',
               padding: '12px 0',
