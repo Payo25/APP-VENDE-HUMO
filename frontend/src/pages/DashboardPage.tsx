@@ -115,7 +115,7 @@ const DashboardPage: React.FC = () => {
               Audit Logs
             </a>
           )}
-          {localStorage.getItem('role') === 'Business Assistant' && (
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
             <a href="/rsa-report" style={{
               display: 'inline-block',
               padding: '12px 0',
@@ -135,7 +135,7 @@ const DashboardPage: React.FC = () => {
               Payroll
             </a>
           )}
-          {localStorage.getItem('role') === 'Business Assistant' && (
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
             <a href="/forms-report" style={{
               display: 'inline-block',
               padding: '12px 0',
@@ -155,7 +155,7 @@ const DashboardPage: React.FC = () => {
               Surgical Forms Report
             </a>
           )}
-          {localStorage.getItem('role') === 'Business Assistant' && (
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
             <a href="/health-centers" style={{
               display: 'inline-block',
               padding: '12px 0',

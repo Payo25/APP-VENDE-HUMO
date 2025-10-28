@@ -528,7 +528,7 @@ app.get('/api/call-hours', async (req, res) => {
 
 app.post('/api/call-hours', async (req, res) => {
   const { month, year, assignments, actorRole } = req.body;
-  if (actorRole !== 'Business Assistant') return res.status(403).json({ error: 'Forbidden' });
+  if (actorRole !== 'Business Assistant' && actorRole !== 'Team Leader') return res.status(403).json({ error: 'Forbidden' });
   if (!month || !year || !assignments) return res.status(400).json({ error: 'Missing params' });
   try {
     const exists = await pool.query(

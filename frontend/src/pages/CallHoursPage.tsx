@@ -41,12 +41,12 @@ const CallHoursPage: React.FC = () => {
   const [tempMinutes, setTempMinutes] = useState(0);
   const navigate = useNavigate();
 
-  // Fetch all RSAs for BA, or just self for RSA
+  // Fetch all RSAs and Team Leaders for BA/Team Leader, or just self for RSA
   useEffect(() => {
-    // Both BA and RSA fetch all RSAs for display
+    // Both BA and RSA fetch all RSAs and Team Leaders for display
     fetch(USERS_API_URL)
       .then(res => res.json())
-      .then(data => setUsers(data.filter((u: any) => u.role === 'Registered Surgical Assistant')));
+      .then(data => setUsers(data.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader')));
   }, [userRole, userId]);
 
   // Fetch assignments for the month
@@ -306,7 +306,7 @@ cells.push(
                                       >
                                         {rsa.fullName || rsa.username}
                                       </span>
-                                      {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
+                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode && (
                                         <button
                                           onClick={() => handleRemoveRSA(thisDay, a.id)}
                                           style={{
@@ -324,7 +324,7 @@ cells.push(
                                       )}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                      {userRole === 'Business Assistant' && !exportingPDF && isEditMode ? (
+                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode ? (
                                         <>
                                           <span style={{ fontSize: 12, color: '#666' }}>Quick:</span>
                                           <select
@@ -369,8 +369,8 @@ cells.push(
                                 );
                               })}
                             </ul>
-                            {/* Only BAs (and not exporting PDF) see the +Add RSA dropdown */}
-                            {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
+                            {/* Only BAs and Team Leaders (and not exporting PDF) see the +Add RSA dropdown */}
+                            {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode && (
                               <select
                                 value=""
                                 onChange={e => { if (e.target.value) handleAddRSA(thisDay, e.target.value); }}
@@ -395,7 +395,7 @@ cells.push(
             </table>
           )}
         </div>
-        {userRole === 'Business Assistant' && (
+        {(userRole === 'Business Assistant' || userRole === 'Team Leader') && (
           <div style={{ display: 'flex', gap: 12, marginTop: 24, alignItems: 'center' }}>
             {!isEditMode && hasSavedData && (
               <button

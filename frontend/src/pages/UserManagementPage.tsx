@@ -361,10 +361,11 @@ const UserManagementPage: React.FC = () => {
                       >
                         <option value="Admin">Admin</option>
                         <option value="Business Assistant">Business Assistant</option>
+                        <option value="Team Leader">Team Leader</option>
                         <option value="Registered Surgical Assistant">Registered Surgical Assistant</option>
                       </select>
                     </div>
-                    {editRole === 'Registered Surgical Assistant' && (
+                    {(editRole === 'Registered Surgical Assistant' || editRole === 'Team Leader') && (
                       <div style={{ marginBottom: 16 }}>
                         <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Hourly Rate ($)</label>
                         <input
@@ -503,6 +504,7 @@ const UserManagementPage: React.FC = () => {
                 >
                   <option value="Admin">Admin</option>
                   <option value="Business Assistant">Business Assistant</option>
+                  <option value="Team Leader">Team Leader</option>
                   <option value="Registered Surgical Assistant">Registered Surgical Assistant</option>
                 </select>
               </div>

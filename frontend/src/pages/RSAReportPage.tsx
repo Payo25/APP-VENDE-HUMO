@@ -38,7 +38,7 @@ const PayrollPage: React.FC = () => {
       fetch(FORMS_API_URL).then(res => res.json()),
       fetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`).then(res => res.json())
     ]).then(([usersData, formsData, assignmentsData]) => {
-      setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant'));
+      setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
       setForms(formsData);
       setAssignments(assignmentsData);
       setLoading(false);
