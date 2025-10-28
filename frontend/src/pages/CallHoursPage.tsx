@@ -34,6 +34,8 @@ const CallHoursPage: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [hasSavedData, setHasSavedData] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const navigate = useNavigate();
 
   // Fetch all RSAs for BA, or just self for RSA
@@ -47,14 +49,21 @@ const CallHoursPage: React.FC = () => {
   // Fetch assignments for the month
   useEffect(() => {
     setLoading(true);
+    setSuccess('');
+    setError('');
     fetch(`${API_URL}?month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
+        const hasData = Object.keys(data).length > 0;
         setAssignments(data);
+        setHasSavedData(hasData);
+        setIsEditMode(!hasData); // Auto-enable edit mode if no saved data
         setLoading(false);
       })
       .catch(() => {
         setAssignments({});
+        setHasSavedData(false);
+        setIsEditMode(true);
         setLoading(false);
       });
   }, [month, year]);
@@ -90,8 +99,13 @@ const CallHoursPage: React.FC = () => {
         actorRole: userRole
       })
     });
-    if (res.ok) setSuccess('Planner saved!');
-    else setError('Failed to save planner.');
+    if (res.ok) {
+      setSuccess(hasSavedData ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
+      setHasSavedData(true);
+      setIsEditMode(false); // Exit edit mode after successful save
+    } else {
+      setError('Failed to save schedule.');
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -137,7 +151,33 @@ const CallHoursPage: React.FC = () => {
         >
           ← Back to Dashboard
         </button>
-        <h2>Call Hours Monthly Planner</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>Call Hours Monthly Planner</h2>
+          {!loading && hasSavedData && !isEditMode && (
+            <span style={{ 
+              padding: '6px 12px', 
+              borderRadius: 6, 
+              background: '#e8f5e9', 
+              color: '#2e7d32', 
+              fontSize: 14, 
+              fontWeight: 600 
+            }}>
+              ✓ Viewing Saved Schedule
+            </span>
+          )}
+          {!loading && isEditMode && hasSavedData && (
+            <span style={{ 
+              padding: '6px 12px', 
+              borderRadius: 6, 
+              background: '#fff3e0', 
+              color: '#e65100', 
+              fontSize: 14, 
+              fontWeight: 600 
+            }}>
+              ✏️ Edit Mode
+            </span>
+          )}
+        </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginBottom: 8 }}>
           <button
             onClick={handleDownloadPDF}
@@ -217,7 +257,7 @@ cells.push(
                                     >
                                       {rsa.fullName || rsa.username}
                                     </span>
-                                    {userRole === 'Business Assistant' && !exportingPDF && (
+                                    {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
                                       <button
                                         onClick={() => handleRemoveRSA(thisDay, a.id)}
                                         style={{
@@ -239,7 +279,7 @@ cells.push(
                               })}
                             </ul>
                             {/* Only BAs (and not exporting PDF) see the +Add RSA dropdown */}
-                            {userRole === 'Business Assistant' && !exportingPDF && (
+                            {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
                               <select
                                 value=""
                                 onChange={e => { if (e.target.value) handleAddRSA(thisDay, e.target.value); }}
@@ -265,12 +305,76 @@ cells.push(
           )}
         </div>
         {userRole === 'Business Assistant' && (
-          <button
-            onClick={handleSave}
-            style={{ marginTop: 24, padding: '10px 32px', borderRadius: 6, background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}
-          >
-            Save Planner
-          </button>
+          <div style={{ display: 'flex', gap: 12, marginTop: 24, alignItems: 'center' }}>
+            {!isEditMode && hasSavedData && (
+              <button
+                onClick={() => setIsEditMode(true)}
+                style={{ 
+                  padding: '10px 32px', 
+                  borderRadius: 6, 
+                  background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', 
+                  color: '#fff', 
+                  border: 'none', 
+                  fontWeight: 600, 
+                  fontSize: 16, 
+                  cursor: 'pointer' 
+                }}
+              >
+                ✏️ Edit Schedule
+              </button>
+            )}
+            {isEditMode && (
+              <>
+                <button
+                  onClick={handleSave}
+                  style={{ 
+                    padding: '10px 32px', 
+                    borderRadius: 6, 
+                    background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', 
+                    color: '#fff', 
+                    border: 'none', 
+                    fontWeight: 600, 
+                    fontSize: 16, 
+                    cursor: 'pointer' 
+                  }}
+                >
+                  💾 {hasSavedData ? 'Update Schedule' : 'Save Schedule'}
+                </button>
+                {hasSavedData && (
+                  <button
+                    onClick={() => {
+                      setIsEditMode(false);
+                      // Reload data to discard changes
+                      setLoading(true);
+                      fetch(`${API_URL}?month=${month}&year=${year}`)
+                        .then(res => res.json())
+                        .then(data => {
+                          setAssignments(data);
+                          setLoading(false);
+                        });
+                    }}
+                    style={{ 
+                      padding: '10px 32px', 
+                      borderRadius: 6, 
+                      background: '#e74c3c', 
+                      color: '#fff', 
+                      border: 'none', 
+                      fontWeight: 600, 
+                      fontSize: 16, 
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    ✖ Cancel
+                  </button>
+                )}
+              </>
+            )}
+            {!isEditMode && hasSavedData && (
+              <span style={{ color: '#43cea2', fontWeight: 600, fontSize: 14 }}>
+                ✓ Saved schedule (read-only mode)
+              </span>
+            )}
+          </div>
         )}
         {success && <div style={{ color: '#43cea2', marginTop: 12 }}>{success}</div>}
         {error && <div style={{ color: '#e74c3c', marginTop: 12 }}>{error}</div>}
