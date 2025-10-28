@@ -28,14 +28,17 @@ const CallHoursPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number }
-  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number }[] }>({});
+  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number }
+  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number }[] }>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [exportingPDF, setExportingPDF] = useState(false);
   const [hasSavedData, setHasSavedData] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [editTimeModal, setEditTimeModal] = useState<{ day: number, rsaId: string, rsaName: string } | null>(null);
+  const [tempHours, setTempHours] = useState(24);
+  const [tempMinutes, setTempMinutes] = useState(0);
   const navigate = useNavigate();
 
   // Fetch all RSAs for BA, or just self for RSA
@@ -78,7 +81,7 @@ const CallHoursPage: React.FC = () => {
       const prevList = prev[dateKey] || [];
       const rsaIdStr = String(rsaId);
       if (prevList.some((a: any) => a.id === rsaIdStr)) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours }] };
+      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours, minutes: 0 }] };
     });
   };
   
@@ -94,6 +97,33 @@ const CallHoursPage: React.FC = () => {
         )
       };
     });
+  };
+  
+  const handleUpdateTime = (day: number, rsaId: string, hours: number, minutes: number) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      const rsaIdStr = String(rsaId);
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) => 
+          a.id === rsaIdStr ? { ...a, hours, minutes } : a
+        )
+      };
+    });
+  };
+  
+  const openEditTimeModal = (day: number, rsaId: string, rsaName: string, currentHours: number, currentMinutes: number) => {
+    setEditTimeModal({ day, rsaId, rsaName });
+    setTempHours(currentHours);
+    setTempMinutes(currentMinutes);
+  };
+  
+  const saveEditTime = () => {
+    if (editTimeModal) {
+      handleUpdateTime(editTimeModal.day, editTimeModal.rsaId, tempHours, tempMinutes);
+      setEditTimeModal(null);
+    }
   };
   
   const handleRemoveRSA = (day: number, rsaId: string) => {
@@ -296,7 +326,7 @@ cells.push(
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                       {userRole === 'Business Assistant' && !exportingPDF && isEditMode ? (
                                         <>
-                                          <span style={{ fontSize: 12, color: '#666' }}>Hours:</span>
+                                          <span style={{ fontSize: 12, color: '#666' }}>Quick:</span>
                                           <select
                                             value={a.hours || 24}
                                             onChange={(e) => handleUpdateHours(thisDay, a.id, Number(e.target.value))}
@@ -313,10 +343,25 @@ cells.push(
                                               <option key={h} value={h}>{h}h</option>
                                             ))}
                                           </select>
+                                          <button
+                                            onClick={() => openEditTimeModal(thisDay, a.id, rsa.fullName || rsa.username, a.hours || 24, a.minutes || 0)}
+                                            style={{
+                                              fontSize: 11,
+                                              padding: '2px 8px',
+                                              borderRadius: 4,
+                                              border: '1px solid #667eea',
+                                              background: '#fff',
+                                              color: '#667eea',
+                                              cursor: 'pointer',
+                                              fontWeight: 600
+                                            }}
+                                          >
+                                            ⏱️ Edit Time
+                                          </button>
                                         </>
                                       ) : (
                                         <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>
-                                          {a.hours || 24} hours
+                                          {a.hours || 24}h {a.minutes ? `${a.minutes}m` : ''}
                                         </span>
                                       )}
                                     </div>
@@ -424,6 +469,135 @@ cells.push(
         )}
         {success && <div style={{ color: '#43cea2', marginTop: 12 }}>{success}</div>}
         {error && <div style={{ color: '#e74c3c', marginTop: 12 }}>{error}</div>}
+        
+        {/* Edit Time Modal */}
+        {editTimeModal && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}
+            onClick={() => setEditTimeModal(null)}
+          >
+            <div
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                padding: 32,
+                maxWidth: 450,
+                width: '90%',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 24, color: '#1f2937' }}>
+                ⏱️ Edit Time for {editTimeModal.rsaName}
+              </h3>
+              
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
+                  Hours:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="24"
+                  value={tempHours}
+                  onChange={(e) => setTempHours(Math.min(24, Math.max(0, Number(e.target.value))))}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: 16,
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+              
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
+                  Minutes:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={tempMinutes}
+                  onChange={(e) => setTempMinutes(Math.min(59, Math.max(0, Number(e.target.value))))}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: 16,
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6,
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+              
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                padding: '12px 16px', 
+                background: '#f3f4f6', 
+                borderRadius: 6,
+                marginBottom: 24
+              }}>
+                <span style={{ fontSize: 14, color: '#6b7280' }}>
+                  Total: <strong style={{ color: '#1f2937', fontSize: 16 }}>{tempHours}h {tempMinutes}m</strong>
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={saveEditTime}
+                  style={{
+                    flex: 1,
+                    padding: '12px 24px',
+                    borderRadius: 6,
+                    background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: 16,
+                    cursor: 'pointer'
+                  }}
+                >
+                  💾 Save
+                </button>
+                <button
+                  onClick={() => setEditTimeModal(null)}
+                  style={{
+                    flex: 1,
+                    padding: '12px 24px',
+                    borderRadius: 6,
+                    background: '#e5e7eb',
+                    color: '#374151',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: 16,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
