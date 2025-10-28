@@ -28,8 +28,8 @@ const CallHoursPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  // Change assignments to store array of objects: { id: string, shift: 'F' | 'H' }
-  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H' }[] }>({});
+  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number }
+  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number }[] }>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -70,13 +70,32 @@ const CallHoursPage: React.FC = () => {
 
   const handleAddRSA = (day: number, rsaId: string) => {
     const dateKey = getDateString(year, month, day);
+    const dayOfWeek = new Date(year, month - 1, day).getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const defaultHours = isWeekend ? 24 : 16; // Default: 24h weekend, 16h weekday
+    
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       const rsaIdStr = String(rsaId);
       if (prevList.some((a: any) => a.id === rsaIdStr)) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F' }] };
+      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours }] };
     });
   };
+  
+  const handleUpdateHours = (day: number, rsaId: string, hours: number) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      const rsaIdStr = String(rsaId);
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) => 
+          a.id === rsaIdStr ? { ...a, hours } : a
+        )
+      };
+    });
+  };
+  
   const handleRemoveRSA = (day: number, rsaId: string) => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
@@ -244,36 +263,63 @@ cells.push(
                                 const rsa = users.find(u => String(u.id) === String(a.id));
                                 if (!rsa) return null;
                                 return (
-                                  <li key={a.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-                                    <span
-                                      style={{
-                                        fontWeight: 700,
-                                        fontSize: 14,
-                                        color: '#185a9d',
-                                        borderRadius: 4,
-                                        padding: '2px 3px',
-                                        marginRight: 2,
-                                      }}
-                                    >
-                                      {rsa.fullName || rsa.username}
-                                    </span>
-                                    {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
-                                      <button
-                                        onClick={() => handleRemoveRSA(thisDay, a.id)}
+                                  <li key={a.id} style={{ marginBottom: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                                      <span
                                         style={{
-                                          marginLeft: 6,
-                                          color: '#e74c3c',
-                                          background: 'none',
-                                          border: 'none',
-                                          cursor: 'pointer',
                                           fontWeight: 700,
-                                          fontSize: 16,
+                                          fontSize: 14,
+                                          color: '#185a9d',
+                                          borderRadius: 4,
+                                          padding: '2px 3px',
                                         }}
-                                        aria-label={`Remove ${rsa.fullName}`}
                                       >
-                                        ×
-                                      </button>
-                                    )}
+                                        {rsa.fullName || rsa.username}
+                                      </span>
+                                      {userRole === 'Business Assistant' && !exportingPDF && isEditMode && (
+                                        <button
+                                          onClick={() => handleRemoveRSA(thisDay, a.id)}
+                                          style={{
+                                            color: '#e74c3c',
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontWeight: 700,
+                                            fontSize: 16,
+                                          }}
+                                          aria-label={`Remove ${rsa.fullName}`}
+                                        >
+                                          ×
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                      {userRole === 'Business Assistant' && !exportingPDF && isEditMode ? (
+                                        <>
+                                          <span style={{ fontSize: 12, color: '#666' }}>Hours:</span>
+                                          <select
+                                            value={a.hours || 24}
+                                            onChange={(e) => handleUpdateHours(thisDay, a.id, Number(e.target.value))}
+                                            style={{
+                                              fontSize: 12,
+                                              padding: '2px 4px',
+                                              borderRadius: 4,
+                                              border: '1px solid #d1d5db',
+                                              background: '#fff',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            {[4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24].map(h => (
+                                              <option key={h} value={h}>{h}h</option>
+                                            ))}
+                                          </select>
+                                        </>
+                                      ) : (
+                                        <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>
+                                          {a.hours || 24} hours
+                                        </span>
+                                      )}
+                                    </div>
                                   </li>
                                 );
                               })}
