@@ -8,6 +8,8 @@ const HealthCentersPage: React.FC = () => {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [fax, setFax] = useState('');
+  const [email, setEmail] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -15,6 +17,8 @@ const HealthCentersPage: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editFax, setEditFax] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editContactPerson, setEditContactPerson] = useState('');
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
   const navigate = useNavigate();
@@ -37,11 +41,11 @@ const HealthCentersPage: React.FC = () => {
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address, phone, contactPerson })
+      body: JSON.stringify({ name, address, phone, fax, email, contactPerson })
     });
     if (res.ok) {
       setSuccess('Health center created.');
-      setName(''); setAddress(''); setPhone(''); setContactPerson('');
+      setName(''); setAddress(''); setPhone(''); setFax(''); setEmail(''); setContactPerson('');
     } else {
       setError('Failed to create health center.');
     }
@@ -62,6 +66,8 @@ const HealthCentersPage: React.FC = () => {
     setEditName(hc.name || '');
     setEditAddress(hc.address || '');
     setEditPhone(hc.phone || '');
+    setEditFax(hc.fax || '');
+    setEditEmail(hc.email || '');
     setEditContactPerson(hc.contactPerson || '');
   };
 
@@ -75,7 +81,7 @@ const HealthCentersPage: React.FC = () => {
     const res = await fetch(`${API_URL}/${editing.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName, address: editAddress, phone: editPhone, contactPerson: editContactPerson })
+      body: JSON.stringify({ name: editName, address: editAddress, phone: editPhone, fax: editFax, email: editEmail, contactPerson: editContactPerson })
     });
     if (res.ok) {
       setSuccess('Health center updated.');
@@ -145,19 +151,23 @@ const HealthCentersPage: React.FC = () => {
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Name</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Address</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Phone</th>
+                <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Fax</th>
+                <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Email</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Contact Person</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {healthCenters.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 16, color: '#888' }}>No health centers found.</td></tr>
+                <tr><td colSpan={7} style={{ padding: 16, color: '#888' }}>No health centers found.</td></tr>
               )}
               {healthCenters.map(hc => (
                 <tr key={hc.id}>
                   <td style={{ padding: 8 }}>{hc.name}</td>
                   <td style={{ padding: 8 }}>{hc.address}</td>
                   <td style={{ padding: 8 }}>{hc.phone}</td>
+                  <td style={{ padding: 8 }}>{hc.fax}</td>
+                  <td style={{ padding: 8 }}>{hc.email}</td>
                   <td style={{ padding: 8 }}>{hc.contactPerson}</td>
                   <td style={{ padding: 8 }}>
                     <button onClick={() => openEdit(hc)} style={{ padding: '6px 16px', borderRadius: 6, background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginRight: 8 }}>✏</button>
@@ -184,6 +194,14 @@ const HealthCentersPage: React.FC = () => {
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Phone</label>
                     <input type="text" value={editPhone} onChange={e => setEditPhone(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Fax</label>
+                    <input type="text" value={editFax} onChange={e => setEditFax(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Email</label>
+                    <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Contact Person</label>
@@ -214,6 +232,14 @@ const HealthCentersPage: React.FC = () => {
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Phone</label>
               <input type="text" value={phone} onChange={e => setPhone(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Fax</label>
+              <input type="text" value={fax} onChange={e => setFax(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Contact Person</label>

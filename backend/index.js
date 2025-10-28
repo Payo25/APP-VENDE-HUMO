@@ -574,12 +574,12 @@ app.get('/api/health-centers', async (req, res) => {
 });
 
 app.post('/api/health-centers', async (req, res) => {
-  const { name, address, phone, contactPerson } = req.body;
+  const { name, address, phone, fax, email, contactPerson } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
     const result = await pool.query(
-      'INSERT INTO health_centers (name, address, phone, contact_person) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, address || '', phone || '', contactPerson || '']
+      'INSERT INTO health_centers (name, address, phone, fax, email, contact_person) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [name, address || '', phone || '', fax || '', email || '', contactPerson || '']
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -588,12 +588,12 @@ app.post('/api/health-centers', async (req, res) => {
 });
 
 app.put('/api/health-centers/:id', async (req, res) => {
-  const { name, address, phone, contactPerson } = req.body;
+  const { name, address, phone, fax, email, contactPerson } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
     const result = await pool.query(
-      'UPDATE health_centers SET name=$1, address=$2, phone=$3, contact_person=$4 WHERE id=$5 RETURNING *',
-      [name, address || '', phone || '', contactPerson || '', req.params.id]
+      'UPDATE health_centers SET name=$1, address=$2, phone=$3, fax=$4, email=$5, contact_person=$6 WHERE id=$7 RETURNING *',
+      [name, address || '', phone || '', fax || '', email || '', contactPerson || '', req.params.id]
     );
     res.json(result.rows[0]);
   } catch (err) {
