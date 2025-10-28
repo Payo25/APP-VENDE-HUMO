@@ -21,6 +21,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Auto-migrate database on startup
+async function migrateDatabase() {
+  try {
+    console.log('🔄 Checking database schema...');
+    
+    // Add fax and email columns to health_centers if they don't exist
+    await pool.query(`
+      ALTER TABLE health_centers 
+      ADD COLUMN IF NOT EXISTS fax VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+    `);
+    
+    console.log('✅ Database schema updated');
+  } catch (err) {
+    console.error('❌ Database migration error:', err.message);
+  }
+}
+
+// Run migration on startup
+migrateDatabase();
+
 // Configure SendGrid for email notifications
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
