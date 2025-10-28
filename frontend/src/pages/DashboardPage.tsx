@@ -57,7 +57,6 @@ const DashboardPage: React.FC = () => {
           >
             View Surgical Forms
           </a>
-          {(localStorage.getItem('role') === 'Admin' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <a href="/forms/create" style={{
             display: 'inline-block',
             padding: '12px 0',
@@ -76,7 +75,6 @@ const DashboardPage: React.FC = () => {
           >
             Create New Surgical Form
           </a>
-          )}
           {localStorage.getItem('role') === 'Admin' && (
             <a href="/users" style={{
               display: 'inline-block',
