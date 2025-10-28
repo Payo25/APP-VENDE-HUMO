@@ -76,18 +76,6 @@ const CallHoursPage: React.FC = () => {
       return { ...prev, [dateKey]: prevList.filter((a: any) => a.id !== rsaIdStr) };
     });
   };
-  const handleToggleShift = (day: number, rsaId: string) => {
-    const dateKey = getDateString(year, month, day);
-    setAssignments(prev => {
-      const prevList = prev[dateKey] || [];
-      return {
-        ...prev,
-        [dateKey]: prevList.map((a: any) =>
-          a.id === String(rsaId) ? { ...a, shift: a.shift === 'F' ? 'H' : 'F' } : a
-        ),
-      };
-    });
-  };
 
   const handleSave = async () => {
     setError('');
@@ -215,25 +203,17 @@ cells.push(
                               {(assignments[dateKey] || []).map((a: any) => {
                                 const rsa = users.find(u => String(u.id) === String(a.id));
                                 if (!rsa) return null;
-                                const isFull = a.shift === 'F';
                                 return (
                                   <li key={a.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
                                     <span
-                                      onClick={userRole === 'Business Assistant' && !exportingPDF ? () => handleToggleShift(thisDay, a.id) : undefined}
                                       style={{
-                                        cursor: userRole === 'Business Assistant' && !exportingPDF ? 'pointer' : 'default',
                                         fontWeight: 700,
                                         fontSize: 14,
-                                        color: isFull ? '#185a9d' : '#05a117', // blue for Full, green for Half
-                                        background: userRole === 'Business Assistant' && !exportingPDF ? 'rgba(24,90,157,0.07)' : 'none',
+                                        color: '#185a9d',
                                         borderRadius: 4,
                                         padding: '2px 3px',
                                         marginRight: 2,
-                                        transition: 'color 0.2s, background 0.2s',
-                                        userSelect: 'none',
                                       }}
-                                      aria-label={`Toggle shift for ${rsa.fullName}`}
-                                      tabIndex={userRole === 'Business Assistant' && !exportingPDF ? 0 : -1}
                                     >
                                       {rsa.fullName || rsa.username}
                                     </span>
@@ -294,24 +274,6 @@ cells.push(
         )}
         {success && <div style={{ color: '#43cea2', marginTop: 12 }}>{success}</div>}
         {error && <div style={{ color: '#e74c3c', marginTop: 12 }}>{error}</div>}
-        {/* Shift type legend */}
-        <div style={{
-          marginTop: 32,
-          padding: '12px 0 0 0',
-          borderTop: '1px solid #e2e8f0',
-          fontSize: 16,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12
-        }}>
-          <span style={{ fontWeight: 600 }}>Shift type:</span>
-          <span>
-            <span style={{ color: '#185a9d', fontWeight: 700, fontSize: 16 }}>Full</span> (24 hours on weekends, and 16 hours on weekdays),
-            <span style={{ marginLeft: 2 }}>
-              <span style={{ color: '#05a117', fontWeight: 700, fontSize: 16 }}>Half</span> (12 hours on weekends, and 8 hours on weekdays).
-            </span>
-          </span>
-        </div>
       </div>
     </div>
   );
