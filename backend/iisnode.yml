@@ -1,6 +1,7 @@
 # iisnode configuration for Azure App Service
 nodeProcessCommandLine: node
 loggingEnabled: true
-debuggingEnabled: false
+debuggingEnabled: true
 devErrorsEnabled: true
 node_env: production
+logDirectory: iisnode
