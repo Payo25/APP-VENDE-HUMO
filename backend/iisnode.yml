@@ -1,5 +1,5 @@
 # iisnode configuration for Azure App Service
-nodeProcessCommandLine: node
+nodeProcessCommandLine: D:\Program Files\nodejs\node.exe
 loggingEnabled: true
 debuggingEnabled: true
 devErrorsEnabled: true
