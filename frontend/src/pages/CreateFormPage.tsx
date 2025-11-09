@@ -142,9 +142,9 @@ const CreateFormPage: React.FC = () => {
           <img src={process.env.PUBLIC_URL + '/logo.jpg'} alt="App Logo" className="page-logo" />
         </div>
         <h2 style={{ color: '#2d3a4b', marginBottom: 16 }}>Create Surgical Form</h2>
-        {userRole !== 'Registered Surgical Assistant' ? (
+        {userRole !== 'Registered Surgical Assistant' && userRole !== 'Business Assistant' ? (
           <div style={{ color: '#e74c3c', marginBottom: 24 }}>
-            Only Registered Surgical Assistants can create new surgical forms.
+            Only Registered Surgical Assistants and Business Assistants can create new surgical forms.
           </div>
         ) : (
         <form onSubmit={handleSubmit} style={{ maxWidth: 400, margin: '0 auto', textAlign: 'left' }} encType="multipart/form-data">
