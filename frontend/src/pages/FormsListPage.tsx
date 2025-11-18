@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDate, formatDateForFilename } from '../utils/dateFormat';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -84,7 +85,7 @@ const FormsListPage: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `surgical-forms-report-${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `surgical-forms-report-${formatDateForFilename(new Date())}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -347,7 +348,7 @@ const FormsListPage: React.FC = () => {
                     <td style={{ padding: 8 }}>{form.procedure}</td>
                     <td style={{ padding: 8 }}>{form.caseType}</td>
                     <td style={{ padding: 8 }}>{form.createdByFullName || form.createdBy}</td>
-                    <td style={{ padding: 8 }}>{form.date ? new Date(form.date).toLocaleDateString() : ''}</td>
+                    <td style={{ padding: 8 }}>{formatDate(form.date)}</td>
                     <td style={{ padding: 8 }}>
                       {userRole === 'Business Assistant' ? (
                         <button

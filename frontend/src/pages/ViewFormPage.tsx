@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SurgicalForm } from '../types/SurgicalForm';
+import { formatDate } from '../utils/dateFormat';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -101,10 +102,10 @@ const ViewFormPage: React.FC = () => {
         {form && (
           <div style={{ textAlign: 'left', maxWidth: 400, margin: '0 auto' }}>
             <p><b>Patient Name:</b> {form.patientName}</p>
-            <p><b>Date of Birth:</b> {form.dob ? new Date(form.dob).toLocaleDateString() : ''}</p>
+            <p><b>Date of Birth:</b> {formatDate(form.dob)}</p>
             <p><b>Insurance Company:</b> {form.insuranceCompany}</p>
             <p><b>Health Center Name:</b> {form.healthCenterName}</p>
-            <p><b>Surgery Date:</b> {form.date ? new Date(form.date).toLocaleDateString() : ''}</p>
+            <p><b>Surgery Date:</b> {formatDate(form.date)}</p>
             <p><b>Time In:</b> {form.timeIn}</p>
             <p><b>Time Out:</b> {form.timeOut}</p>
             <p><b>Doctor's Name:</b> {form.doctorName}</p>

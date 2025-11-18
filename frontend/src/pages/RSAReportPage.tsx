@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
+import { formatDate } from '../utils/dateFormat';
 
 const API_BASE_URL = '/api';
 const FORMS_API_URL = `${API_BASE_URL}/forms`;
@@ -150,7 +151,7 @@ const PayrollPage: React.FC = () => {
         totalShiftGT3 += shiftGT3;
         totalVoluntary += voluntary;
         totalCancelled += cancelled;
-        csv += `"${rsa.fullName || rsa.username}",${date.toLocaleDateString()},${dayName},${callHour},${shiftLT3},${shiftGT3},${voluntary},${cancelled}\n`;
+        csv += `"${rsa.fullName || rsa.username}",${formatDate(date)},${dayName},${callHour},${shiftLT3},${shiftGT3},${voluntary},${cancelled}\n`;
       });
       // Add totals row for this RSA
       csv += `"${rsa.fullName || rsa.username}",Total,,${totalCallHour},${totalShiftLT3},${totalShiftGT3},${totalVoluntary},${totalCancelled}\n`;
@@ -236,7 +237,7 @@ const PayrollPage: React.FC = () => {
             <h3 style={{ marginBottom: 8 }}>{rsa.fullName || rsa.username}</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24, background: '#f6f8fa' }}>
               <caption style={{ textAlign: 'left', fontWeight: 600, marginBottom: 4 }}>
-                {fromDate && toDate ? `${from.toLocaleDateString()} - ${to.toLocaleDateString()}` : ''}
+                {fromDate && toDate ? `${formatDate(from)} - ${formatDate(to)}` : ''}
               </caption>
               <thead>
                 <tr>
@@ -252,7 +253,7 @@ const PayrollPage: React.FC = () => {
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={idx}>
-                    <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.date.toLocaleDateString()}</td>
+                    <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{formatDate(row.date)}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.dayName}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.callHour}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.shiftLT3}</td>

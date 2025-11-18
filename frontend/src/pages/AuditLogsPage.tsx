@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDateForFilename } from '../utils/dateFormat';
 
 interface AuditLog {
   timestamp: string;
@@ -155,7 +156,7 @@ const AuditLogsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `audit-logs-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `audit-logs-${formatDateForFilename(new Date())}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

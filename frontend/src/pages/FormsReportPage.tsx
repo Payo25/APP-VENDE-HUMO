@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatDateForFilename } from '../utils/dateFormat';
 
 const API_BASE_URL = '/api';
 const FORMS_API_URL = `${API_BASE_URL}/forms`;
@@ -88,7 +89,7 @@ const FormsReportPage: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `surgical-forms-report-${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `surgical-forms-report-${formatDateForFilename(new Date())}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
