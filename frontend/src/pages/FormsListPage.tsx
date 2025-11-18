@@ -12,6 +12,13 @@ const FormsListPage: React.FC = () => {
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
   const [currentPage, setCurrentPage] = useState(1);
   const formsPerPage = 15;
+  
+  // Filter states for Business Assistant
+  const [filterProcedure, setFilterProcedure] = useState('');
+  const [filterCaseType, setFilterCaseType] = useState('');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>('');
 
   useEffect(() => {
     fetch(API_URL)
@@ -83,11 +90,43 @@ const FormsListPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  // Filter and sort forms (for Business Assistant)
+  let filteredForms = [...forms];
+  
+  if (userRole === 'Business Assistant') {
+    // Apply filters
+    if (filterProcedure) {
+      filteredForms = filteredForms.filter(f => f.procedure === filterProcedure);
+    }
+    if (filterCaseType) {
+      filteredForms = filteredForms.filter(f => f.caseType === filterCaseType);
+    }
+    if (filterCreatedBy) {
+      filteredForms = filteredForms.filter(f => f.createdByFullName === filterCreatedBy || f.createdBy === filterCreatedBy);
+    }
+    if (filterStatus) {
+      filteredForms = filteredForms.filter(f => f.status === filterStatus);
+    }
+    
+    // Apply alphabetical sorting for patient names
+    if (sortPatientAlpha === 'asc') {
+      filteredForms.sort((a, b) => (a.patientName || '').localeCompare(b.patientName || ''));
+    } else if (sortPatientAlpha === 'desc') {
+      filteredForms.sort((a, b) => (b.patientName || '').localeCompare(a.patientName || ''));
+    }
+  }
+
+  // Get unique values for dropdowns
+  const uniqueProcedures = Array.from(new Set(forms.map(f => f.procedure).filter(Boolean)));
+  const uniqueCaseTypes = Array.from(new Set(forms.map(f => f.caseType).filter(Boolean)));
+  const uniqueCreatedBy = Array.from(new Set(forms.map(f => f.createdByFullName || f.createdBy).filter(Boolean)));
+  const uniqueStatuses = Array.from(new Set(forms.map(f => f.status).filter(Boolean)));
+
   // Pagination logic
   const indexOfLastForm = currentPage * formsPerPage;
   const indexOfFirstForm = indexOfLastForm - formsPerPage;
-  const currentForms = forms.slice(indexOfFirstForm, indexOfLastForm);
-  const totalPages = Math.ceil(forms.length / formsPerPage);
+  const currentForms = filteredForms.slice(indexOfFirstForm, indexOfLastForm);
+  const totalPages = Math.ceil(filteredForms.length / formsPerPage);
 
   return (
     <div
@@ -127,6 +166,159 @@ const FormsListPage: React.FC = () => {
           <img src={process.env.PUBLIC_URL + '/logo.jpg'} alt="App Logo" className="page-logo" />
         </div>
         <h2 style={{ color: '#2d3a4b', marginBottom: 16 }} tabIndex={0}>Surgical Forms</h2>
+        
+        {/* Filters for Business Assistant */}
+        {userRole === 'Business Assistant' && !loading && !error && (
+          <div style={{ 
+            background: '#f8f9fa', 
+            padding: '16px', 
+            borderRadius: '8px', 
+            marginBottom: '16px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '12px'
+          }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Patient Name
+              </label>
+              <select
+                value={sortPatientAlpha}
+                onChange={(e) => setSortPatientAlpha(e.target.value as 'asc' | 'desc' | '')}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">No Sort</option>
+                <option value="asc">A → Z</option>
+                <option value="desc">Z → A</option>
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Procedure
+              </label>
+              <select
+                value={filterProcedure}
+                onChange={(e) => setFilterProcedure(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">All Procedures</option>
+                {uniqueProcedures.map(proc => (
+                  <option key={proc} value={proc}>{proc}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Case Type
+              </label>
+              <select
+                value={filterCaseType}
+                onChange={(e) => setFilterCaseType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">All Case Types</option>
+                {uniqueCaseTypes.map(caseType => (
+                  <option key={caseType} value={caseType}>{caseType}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Created By
+              </label>
+              <select
+                value={filterCreatedBy}
+                onChange={(e) => setFilterCreatedBy(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">All Users</option>
+                {uniqueCreatedBy.map(user => (
+                  <option key={user} value={user}>{user}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Status
+              </label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">All Statuses</option>
+                {uniqueStatuses.map(status => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setFilterProcedure('');
+                  setFilterCaseType('');
+                  setFilterCreatedBy('');
+                  setFilterStatus('');
+                  setSortPatientAlpha('');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  background: '#6c757d',
+                  color: '#fff',
+                  border: 'none',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        )}
+        
         {loading && <p>Loading...</p>}
         {error && <p style={{ color: '#e74c3c' }} role="alert">{error}</p>}
         {!loading && !error && (
