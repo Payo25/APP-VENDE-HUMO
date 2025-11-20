@@ -91,30 +91,28 @@ const FormsListPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Filter and sort forms (for Business Assistant)
+  // Filter and sort forms (for all roles)
   let filteredForms = [...forms];
   
-  if (userRole === 'Business Assistant') {
-    // Apply filters
-    if (filterProcedure) {
-      filteredForms = filteredForms.filter(f => f.procedure === filterProcedure);
-    }
-    if (filterCaseType) {
-      filteredForms = filteredForms.filter(f => f.caseType === filterCaseType);
-    }
-    if (filterCreatedBy) {
-      filteredForms = filteredForms.filter(f => f.createdByFullName === filterCreatedBy || f.createdBy === filterCreatedBy);
-    }
-    if (filterStatus) {
-      filteredForms = filteredForms.filter(f => f.status === filterStatus);
-    }
-    
-    // Apply alphabetical sorting for patient names
-    if (sortPatientAlpha === 'asc') {
-      filteredForms.sort((a, b) => (a.patientName || '').localeCompare(b.patientName || ''));
-    } else if (sortPatientAlpha === 'desc') {
-      filteredForms.sort((a, b) => (b.patientName || '').localeCompare(a.patientName || ''));
-    }
+  // Apply filters
+  if (filterProcedure) {
+    filteredForms = filteredForms.filter(f => f.procedure === filterProcedure);
+  }
+  if (filterCaseType) {
+    filteredForms = filteredForms.filter(f => f.caseType === filterCaseType);
+  }
+  if (filterCreatedBy) {
+    filteredForms = filteredForms.filter(f => f.createdByFullName === filterCreatedBy || f.createdBy === filterCreatedBy);
+  }
+  if (filterStatus) {
+    filteredForms = filteredForms.filter(f => f.status === filterStatus);
+  }
+  
+  // Apply alphabetical sorting for patient names
+  if (sortPatientAlpha === 'asc') {
+    filteredForms.sort((a, b) => (a.patientName || '').localeCompare(b.patientName || ''));
+  } else if (sortPatientAlpha === 'desc') {
+    filteredForms.sort((a, b) => (b.patientName || '').localeCompare(a.patientName || ''));
   }
 
   // Get unique values for dropdowns
@@ -168,8 +166,8 @@ const FormsListPage: React.FC = () => {
         </div>
         <h2 style={{ color: '#2d3a4b', marginBottom: 16 }} tabIndex={0}>Surgical Forms</h2>
         
-        {/* Filters for Business Assistant */}
-        {userRole === 'Business Assistant' && !loading && !error && (
+        {/* Filters for all users */}
+        {!loading && !error && (
           <div style={{ 
             background: '#f8f9fa', 
             padding: '16px', 
