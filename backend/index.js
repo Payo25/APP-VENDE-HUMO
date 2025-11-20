@@ -259,6 +259,11 @@ app.get('/api/forms/:id', async (req, res) => {
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
+    
+    // Debug logging
+    console.log('Raw form.date from DB:', form.date, 'Type:', typeof form.date);
+    console.log('Raw form.dob from DB:', form.dob, 'Type:', typeof form.dob);
+    
     const camelCaseForm = {
       id: form.id,
       patientName: form.patientname,
