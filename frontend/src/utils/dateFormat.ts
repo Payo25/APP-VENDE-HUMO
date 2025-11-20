@@ -2,6 +2,16 @@
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return '';
   
+  // If date is already a string in YYYY-MM-DD format, parse it directly without timezone conversion
+  if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const parts = date.split('-');
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2].substring(0, 2); // Take only first 2 chars in case there's time component
+    return `${month}/${day}/${year}`;
+  }
+  
+  // Fallback for Date objects
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
   
