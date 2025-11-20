@@ -213,14 +213,16 @@ app.get('/api/forms', async (req, res) => {
       LEFT JOIN users ON forms.createdbyuserid = users.id
       ORDER BY forms.id DESC
     `);
+    // Helper function to format dates consistently (avoid timezone shifts)
+    const formatDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
       id: form.id,
       patientName: form.patientname,
-      dob: form.dob,
+      dob: formatDate(form.dob),
       insuranceCompany: form.insurancecompany,
       healthCenterName: form.healthcentername,
-      date: form.date,
+      date: formatDate(form.date),
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
