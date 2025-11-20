@@ -216,10 +216,16 @@ app.get('/api/forms', async (req, res) => {
     // Helper function to format dates consistently (avoid timezone shifts)
     const formatDate = (d) => {
       if (!d) return '';
+      // If d is already a string in YYYY-MM-DD format, return it
+      if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return d.slice(0, 10);
+      }
+      // Otherwise parse it carefully to avoid timezone issues
       const date = new Date(d);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      // Use UTC methods to avoid local timezone shifts
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
     // Map DB fields to camelCase for frontend compatibility
@@ -263,10 +269,16 @@ app.get('/api/forms/:id', async (req, res) => {
     // Format dates for HTML input compatibility (avoid timezone shifts)
     const formatDate = (d) => {
       if (!d) return '';
+      // If d is already a string in YYYY-MM-DD format, return it
+      if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return d.slice(0, 10);
+      }
+      // Otherwise parse it carefully to avoid timezone issues
       const date = new Date(d);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      // Use UTC methods to avoid local timezone shifts
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
     const camelCaseForm = {
