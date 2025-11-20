@@ -214,28 +214,38 @@ async function uploadToBlob(file) {
 app.get('/api/forms', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
+      SELECT 
+        forms.id,
+        forms.patientname,
+        TO_CHAR(forms.dob, 'YYYY-MM-DD') as dob,
+        forms.insurancecompany,
+        forms.healthcentername,
+        TO_CHAR(forms.date, 'YYYY-MM-DD') as date,
+        forms.timein,
+        forms.timeout,
+        forms.doctorname,
+        forms.procedure,
+        forms.casetype,
+        forms.status,
+        forms.createdby,
+        forms.createdbyuserid,
+        forms.surgeryformfileurl,
+        forms.createdat,
+        forms.lastmodified,
+        users.fullname AS createdbyfullname,
+        users.username AS createdbyemail
       FROM forms
       LEFT JOIN users ON forms.createdbyuserid = users.id
       ORDER BY forms.id DESC
     `);
-    // Helper function to format dates consistently
-    // With the type parser set above, dates come as strings already
-    const formatDate = (d) => {
-      if (!d) return '';
-      // If it's already a string in YYYY-MM-DD format, return it
-      if (typeof d === 'string') return d.slice(0, 10);
-      // Fallback for any unexpected Date objects
-      return d.toISOString().slice(0, 10);
-    };
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
       id: form.id,
       patientName: form.patientname,
-      dob: formatDate(form.dob),
+      dob: form.dob,
       insuranceCompany: form.insurancecompany,
       healthCenterName: form.healthcentername,
-      date: formatDate(form.date),
+      date: form.date,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
@@ -259,29 +269,39 @@ app.get('/api/forms', async (req, res) => {
 app.get('/api/forms/:id', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
+      SELECT 
+        forms.id,
+        forms.patientname,
+        TO_CHAR(forms.dob, 'YYYY-MM-DD') as dob,
+        forms.insurancecompany,
+        forms.healthcentername,
+        TO_CHAR(forms.date, 'YYYY-MM-DD') as date,
+        forms.timein,
+        forms.timeout,
+        forms.doctorname,
+        forms.procedure,
+        forms.casetype,
+        forms.status,
+        forms.createdby,
+        forms.createdbyuserid,
+        forms.surgeryformfileurl,
+        forms.createdat,
+        forms.lastmodified,
+        users.fullname AS createdbyfullname,
+        users.username AS createdbyemail
       FROM forms
       LEFT JOIN users ON forms.createdbyuserid = users.id
       WHERE forms.id = $1
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
-    // Format dates for HTML input compatibility
-    // With the type parser set above, dates come as strings already
-    const formatDate = (d) => {
-      if (!d) return '';
-      // If it's already a string in YYYY-MM-DD format, return it
-      if (typeof d === 'string') return d.slice(0, 10);
-      // Fallback for any unexpected Date objects
-      return d.toISOString().slice(0, 10);
-    };
     const camelCaseForm = {
       id: form.id,
       patientName: form.patientname,
-      dob: formatDate(form.dob),
+      dob: form.dob,
       insuranceCompany: form.insurancecompany,
       healthCenterName: form.healthcentername,
-      date: formatDate(form.date),
+      date: form.date,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
