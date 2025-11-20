@@ -117,11 +117,20 @@ app.get('/api/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW() as time, current_database() as db');
     const userCheck = await pool.query('SELECT COUNT(*) as count FROM users');
+    
+    // Debug: Check a specific form's date
+    const formCheck = await pool.query('SELECT id, date, dob FROM forms ORDER BY id DESC LIMIT 1');
+    const formData = formCheck.rows[0] || {};
+    
     res.json({ 
       status: 'ok', 
       database: result.rows[0],
       userCount: userCheck.rows[0].count,
-      hasEnvVar: !!process.env.DATABASE_URL
+      hasEnvVar: !!process.env.DATABASE_URL,
+      sampleFormDate: formData.date,
+      sampleFormDateType: typeof formData.date,
+      sampleFormDob: formData.dob,
+      sampleFormDobType: typeof formData.dob
     });
   } catch (error) {
     res.status(500).json({ 
