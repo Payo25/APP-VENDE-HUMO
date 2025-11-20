@@ -214,7 +214,14 @@ app.get('/api/forms', async (req, res) => {
       ORDER BY forms.id DESC
     `);
     // Helper function to format dates consistently (avoid timezone shifts)
-    const formatDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
+    const formatDate = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
       id: form.id,
@@ -253,8 +260,15 @@ app.get('/api/forms/:id', async (req, res) => {
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
-    // Format dates for HTML input compatibility
-    const formatDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
+    // Format dates for HTML input compatibility (avoid timezone shifts)
+    const formatDate = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
     const camelCaseForm = {
       id: form.id,
       patientName: form.patientname,
