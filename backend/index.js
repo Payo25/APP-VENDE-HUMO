@@ -211,29 +211,11 @@ async function uploadToBlob(file) {
 
 
 // --- Forms API using PostgreSQL ---
+// --- Forms API using PostgreSQL ---
 app.get('/api/forms', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        forms.id,
-        forms.patientname,
-        forms.dob::text as dob,
-        forms.insurancecompany,
-        forms.healthcentername,
-        forms.date::text as date,
-        forms.timein,
-        forms.timeout,
-        forms.doctorname,
-        forms.procedure,
-        forms.casetype,
-        forms.status,
-        forms.createdby,
-        forms.createdbyuserid,
-        forms.surgeryformfileurl,
-        forms.createdat,
-        forms.lastmodified,
-        users.fullname AS createdbyfullname,
-        users.username AS createdbyemail
+      SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
       FROM forms
       LEFT JOIN users ON forms.createdbyuserid = users.id
       ORDER BY forms.id DESC
@@ -270,26 +252,7 @@ app.get('/api/forms', async (req, res) => {
 app.get('/api/forms/:id', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        forms.id,
-        forms.patientname,
-        forms.dob::text as dob,
-        forms.insurancecompany,
-        forms.healthcentername,
-        forms.date::text as date,
-        forms.timein,
-        forms.timeout,
-        forms.doctorname,
-        forms.procedure,
-        forms.casetype,
-        forms.status,
-        forms.createdby,
-        forms.createdbyuserid,
-        forms.surgeryformfileurl,
-        forms.createdat,
-        forms.lastmodified,
-        users.fullname AS createdbyfullname,
-        users.username AS createdbyemail
+      SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
       FROM forms
       LEFT JOIN users ON forms.createdbyuserid = users.id
       WHERE forms.id = $1
