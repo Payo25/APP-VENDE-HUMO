@@ -217,10 +217,10 @@ app.get('/api/forms', async (req, res) => {
       SELECT 
         forms.id,
         forms.patientname,
-        TO_CHAR(forms.dob, 'YYYY-MM-DD') as dob,
+        forms.dob::text as dob,
         forms.insurancecompany,
         forms.healthcentername,
-        TO_CHAR(forms.date, 'YYYY-MM-DD') as date,
+        forms.date::text as date,
         forms.timein,
         forms.timeout,
         forms.doctorname,
@@ -262,6 +262,7 @@ app.get('/api/forms', async (req, res) => {
     }));
     res.json(forms);
   } catch (err) {
+    console.error('Error fetching forms:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -272,10 +273,10 @@ app.get('/api/forms/:id', async (req, res) => {
       SELECT 
         forms.id,
         forms.patientname,
-        TO_CHAR(forms.dob, 'YYYY-MM-DD') as dob,
+        forms.dob::text as dob,
         forms.insurancecompany,
         forms.healthcentername,
-        TO_CHAR(forms.date, 'YYYY-MM-DD') as date,
+        forms.date::text as date,
         forms.timein,
         forms.timeout,
         forms.doctorname,
