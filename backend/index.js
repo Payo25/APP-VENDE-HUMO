@@ -1,5 +1,11 @@
 require('dotenv').config();
 const { Pool } = require('pg');
+const types = require('pg-types');
+
+// Force PostgreSQL to return DATE columns as strings (not Date objects)
+// This prevents timezone conversion issues
+types.setTypeParser(1082, val => val); // 1082 is the OID for DATE type
+
 // Database connection pool for Azure PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -213,20 +219,14 @@ app.get('/api/forms', async (req, res) => {
       LEFT JOIN users ON forms.createdbyuserid = users.id
       ORDER BY forms.id DESC
     `);
-    // Helper function to format dates consistently (avoid timezone shifts)
+    // Helper function to format dates consistently
+    // With the type parser set above, dates come as strings already
     const formatDate = (d) => {
       if (!d) return '';
-      // If d is already a string in YYYY-MM-DD format, return it
-      if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}/)) {
-        return d.slice(0, 10);
-      }
-      // Otherwise parse it carefully to avoid timezone issues
-      const date = new Date(d);
-      // Use UTC methods to avoid local timezone shifts
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      // If it's already a string in YYYY-MM-DD format, return it
+      if (typeof d === 'string') return d.slice(0, 10);
+      // Fallback for any unexpected Date objects
+      return d.toISOString().slice(0, 10);
     };
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
@@ -266,20 +266,14 @@ app.get('/api/forms/:id', async (req, res) => {
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
-    // Format dates for HTML input compatibility (avoid timezone shifts)
+    // Format dates for HTML input compatibility
+    // With the type parser set above, dates come as strings already
     const formatDate = (d) => {
       if (!d) return '';
-      // If d is already a string in YYYY-MM-DD format, return it
-      if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}/)) {
-        return d.slice(0, 10);
-      }
-      // Otherwise parse it carefully to avoid timezone issues
-      const date = new Date(d);
-      // Use UTC methods to avoid local timezone shifts
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      // If it's already a string in YYYY-MM-DD format, return it
+      if (typeof d === 'string') return d.slice(0, 10);
+      // Fallback for any unexpected Date objects
+      return d.toISOString().slice(0, 10);
     };
     const camelCaseForm = {
       id: form.id,
