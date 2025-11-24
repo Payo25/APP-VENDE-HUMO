@@ -14,12 +14,14 @@ const FormsListPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const formsPerPage = 15;
   
-  // Filter states for Business Assistant
+  // Filter states for all users
   const [filterProcedure, setFilterProcedure] = useState('');
   const [filterCaseType, setFilterCaseType] = useState('');
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
 
   useEffect(() => {
     fetch(API_URL)
@@ -106,6 +108,14 @@ const FormsListPage: React.FC = () => {
   }
   if (filterStatus) {
     filteredForms = filteredForms.filter(f => f.status === filterStatus);
+  }
+  
+  // Apply date range filter
+  if (filterDateFrom) {
+    filteredForms = filteredForms.filter(f => f.date >= filterDateFrom);
+  }
+  if (filterDateTo) {
+    filteredForms = filteredForms.filter(f => f.date <= filterDateTo);
   }
   
   // Apply alphabetical sorting for patient names
@@ -291,6 +301,44 @@ const FormsListPage: React.FC = () => {
               </select>
             </div>
             
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Date From
+              </label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Date To
+              </label>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              />
+            </div>
+            
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button
                 onClick={() => {
@@ -298,6 +346,8 @@ const FormsListPage: React.FC = () => {
                   setFilterCaseType('');
                   setFilterCreatedBy('');
                   setFilterStatus('');
+                  setFilterDateFrom('');
+                  setFilterDateTo('');
                   setSortPatientAlpha('');
                 }}
                 style={{
