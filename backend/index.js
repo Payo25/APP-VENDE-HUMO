@@ -18,85 +18,14 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { body, validationResult } = require('express-validator');
 const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
 const sgMail = require('@sendgrid/mail');
 const twilio = require('twilio');
 
 
 const app = express();
-
-// Security: Helmet for secure headers
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-}));
-
-// Security: CORS - allow same-origin requests (backend serves frontend)
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (same-origin, mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    // In production, allow the Azure domain
-    const allowedOrigins = [
-      'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net',
-      'http://localhost:3000',
-      'http://localhost:5043'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
-    
-    // Allow same-origin requests
-    return callback(null, true);
-  },
-  credentials: true
-}));
-
+app.use(cors());
 app.use(express.json());
-
-// Security: Rate limiting for login endpoint
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
-  message: 'Too many login attempts, please try again after 15 minutes',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Security: Rate limiting for general API endpoints
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
-  message: 'Too many requests, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Security: Rate limiting for file uploads
-const uploadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 uploads per window
-  message: 'Too many upload attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 // Auto-migrate database on startup
 async function migrateDatabase() {
@@ -291,9 +220,6 @@ async function uploadToBlob(file) {
 
 
 // --- Forms API using PostgreSQL ---
-// Apply general API rate limiting to all /api routes except login (which has its own)
-app.use('/api', apiLimiter);
-
 app.get('/api/forms', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -373,7 +299,7 @@ app.get('/api/forms/:id', async (req, res) => {
   }
 });
 
-app.post('/api/forms', uploadLimiter, upload.single('surgeryFormFile'), async (req, res) => {
+app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   console.log('=== Form submission received ===');
   console.log('Body:', req.body);
   console.log('File:', req.file);
@@ -428,7 +354,7 @@ app.post('/api/forms', uploadLimiter, upload.single('surgeryFormFile'), async (r
 });
 
 // --- PATCH: Support multipart/form-data for editing forms with/without file ---
-app.put('/api/forms/:id', uploadLimiter, upload.single('surgeryFormFile'), async (req, res) => {
+app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => {
   try {
     // Explicit mapping from camelCase to DB columns
     const fieldMap = {
@@ -505,23 +431,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', apiLimiter, [
-  body('username').isEmail().normalizeEmail().withMessage('Valid email required'),
-  body('password')
-    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
-    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
-    .matches(/[a-z]/).withMessage('Password must contain at least one lowercase letter')
-    .matches(/[0-9]/).withMessage('Password must contain at least one number')
-    .matches(/[!@#$%^&*(),.?":{}|<>]/).withMessage('Password must contain at least one special character'),
-  body('fullName').trim().notEmpty().withMessage('Full name required'),
-  body('role').isIn(['Admin', 'Team Leader', 'Surgeon', 'Registered Surgical Assistant', 'Business Assistant']).withMessage('Invalid role')
-], async (req, res) => {
-  // Validate input
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
-  }
-  
+app.post('/api/users', async (req, res) => {
   const { username, role, password, actor, fullName } = req.body;
   if (!username || !role || !password || !fullName) return res.status(400).json({ error: 'Missing fields' });
   try {
@@ -596,16 +506,7 @@ function logAudit(action, actor, details) {
 }
 
 // --- Login API ---
-app.post('/api/login', loginLimiter, [
-  body('username').isEmail().normalizeEmail().withMessage('Valid email required'),
-  body('password').notEmpty().withMessage('Password required')
-], async (req, res) => {
-  // Validate input
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ error: 'Invalid input', details: errors.array() });
-  }
-  
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   console.log('Login attempt:', username);
   if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
