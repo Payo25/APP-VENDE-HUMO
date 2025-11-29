@@ -275,10 +275,10 @@ app.get('/api/forms/:id', async (req, res) => {
     const camelCaseForm = {
       id: form.id,
       patientName: form.patientname,
-      dob: form.dob,
+      dob: form.dob ? new Date(form.dob).toISOString().split('T')[0] : null,
       insuranceCompany: form.insurancecompany,
       healthCenterName: form.healthcentername,
-      date: form.date,
+      date: form.date ? new Date(form.date).toISOString().split('T')[0] : null,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
