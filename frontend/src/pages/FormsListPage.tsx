@@ -112,10 +112,18 @@ const FormsListPage: React.FC = () => {
   
   // Apply date range filter
   if (filterDateFrom) {
-    filteredForms = filteredForms.filter(f => f.date >= filterDateFrom);
+    filteredForms = filteredForms.filter(f => {
+      if (!f.date) return false;
+      const formDate = new Date(f.date).toISOString().split('T')[0];
+      return formDate >= filterDateFrom;
+    });
   }
   if (filterDateTo) {
-    filteredForms = filteredForms.filter(f => f.date <= filterDateTo);
+    filteredForms = filteredForms.filter(f => {
+      if (!f.date) return false;
+      const formDate = new Date(f.date).toISOString().split('T')[0];
+      return formDate <= filterDateTo;
+    });
   }
   
   // Apply alphabetical sorting for patient names
