@@ -114,15 +114,13 @@ const FormsListPage: React.FC = () => {
   if (filterDateFrom) {
     filteredForms = filteredForms.filter(f => {
       if (!f.date) return false;
-      const formDate = new Date(f.date).toISOString().split('T')[0];
-      return formDate >= filterDateFrom;
+      return f.date >= filterDateFrom;
     });
   }
   if (filterDateTo) {
     filteredForms = filteredForms.filter(f => {
       if (!f.date) return false;
-      const formDate = new Date(f.date).toISOString().split('T')[0];
-      return formDate <= filterDateTo;
+      return f.date <= filterDateTo;
     });
   }
   

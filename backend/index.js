@@ -232,10 +232,10 @@ app.get('/api/forms', async (req, res) => {
     const forms = result.rows.map(form => ({
       id: form.id,
       patientName: form.patientname,
-      dob: form.dob,
+      dob: form.dob ? new Date(form.dob).toISOString().split('T')[0] : null,
       insuranceCompany: form.insurancecompany,
       healthCenterName: form.healthcentername,
-      date: form.date,
+      date: form.date ? new Date(form.date).toISOString().split('T')[0] : null,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
