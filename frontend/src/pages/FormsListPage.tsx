@@ -20,6 +20,7 @@ const FormsListPage: React.FC = () => {
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>('');
+  const [sortDate, setSortDate] = useState<'asc' | 'desc' | ''>('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
 
@@ -129,6 +130,20 @@ const FormsListPage: React.FC = () => {
     filteredForms.sort((a, b) => (a.patientName || '').localeCompare(b.patientName || ''));
   } else if (sortPatientAlpha === 'desc') {
     filteredForms.sort((a, b) => (b.patientName || '').localeCompare(a.patientName || ''));
+  } else if (sortDate === 'asc') {
+    // Sort by date ascending (oldest first)
+    filteredForms.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
+  } else if (sortDate === 'desc') {
+    // Sort by date descending (newest first)
+    filteredForms.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return b.date.localeCompare(a.date);
+    });
   }
 
   // Get unique values for dropdowns
@@ -199,7 +214,7 @@ const FormsListPage: React.FC = () => {
               </label>
               <select
                 value={sortPatientAlpha}
-                onChange={(e) => setSortPatientAlpha(e.target.value as 'asc' | 'desc' | '')}
+                onChange={(e) => { setSortPatientAlpha(e.target.value as 'asc' | 'desc' | ''); setSortDate(''); }}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -212,6 +227,28 @@ const FormsListPage: React.FC = () => {
                 <option value="">No Sort</option>
                 <option value="asc">A → Z</option>
                 <option value="desc">Z → A</option>
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Date
+              </label>
+              <select
+                value={sortDate}
+                onChange={(e) => { setSortDate(e.target.value as 'asc' | 'desc' | ''); setSortPatientAlpha(''); }}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">No Sort</option>
+                <option value="asc">Oldest First</option>
+                <option value="desc">Newest First</option>
               </select>
             </div>
             
@@ -355,6 +392,7 @@ const FormsListPage: React.FC = () => {
                   setFilterDateFrom('');
                   setFilterDateTo('');
                   setSortPatientAlpha('');
+                  setSortDate('');
                 }}
                 style={{
                   width: '100%',
