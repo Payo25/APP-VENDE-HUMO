@@ -103,16 +103,24 @@ const PayrollPage: React.FC = () => {
     const dateKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     const assigned = assignments[dateKey] || [];
     const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-    // Defensive: support both old (string[]) and new ([{id,shift}]) formats
+    // Defensive: support both old (string[]) and new ([{id,shift,hours,minutes}]) formats
     if (assigned.length > 0 && typeof assigned[0] === 'object' && assigned[0] !== null && Object.prototype.hasOwnProperty.call(assigned[0], 'shift')) {
-      // New format: array of { id, shift }
-      const assignment = assigned.find((a: any) => String(a.id) === String(rsaId) || String(a.id) === String(Number(rsaId)));
+      // New format: array of { id, shift, hours?, minutes? }
+      const assignment: any = assigned.find((a: any) => String(a.id) === String(rsaId) || String(a.id) === String(Number(rsaId)));
       if (!assignment) return '';
-      if ((assignment as any).shift === 'F') {
+      
+      // If custom hours/minutes are set, use them
+      if (assignment.hours !== undefined) {
+        const totalHours = (assignment.hours || 0) + ((assignment.minutes || 0) / 60);
+        return totalHours.toFixed(2);
+      }
+      
+      // Otherwise use shift type defaults
+      if (assignment.shift === 'F') {
         // Full shift: 24 on weekends, 16 on weekdays
         return (dayOfWeek === 0 || dayOfWeek === 6) ? '24' : '16';
       }
-      if ((assignment as any).shift === 'H') {
+      if (assignment.shift === 'H') {
         // Half shift: 12 on weekends, 8 on weekdays
         return (dayOfWeek === 0 || dayOfWeek === 6) ? '12' : '8';
       }
