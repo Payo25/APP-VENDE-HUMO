@@ -145,11 +145,17 @@ const PayrollPage: React.FC = () => {
       dateRange.forEach(date => {
         const dayName = getDayName(date);
         const callHour = getCallHour(rsa.id, date);
-        const d = date.getDate();
-        const m = date.getMonth() + 1;
-        const y = date.getFullYear();
         const rsaId = rsa.id;
-        const dayForms = forms.filter(f => f.createdByUserId === parseInt(rsaId) && f.date && new Date(f.date).getFullYear() === y && new Date(f.date).getMonth() + 1 === m && new Date(f.date).getDate() === d);
+        // Create date string in YYYY-MM-DD format for comparison
+        const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+        // Compare date strings directly to avoid timezone issues
+        const dayForms = forms.filter(f => {
+          if (!f.createdByUserId || f.createdByUserId !== parseInt(rsaId)) return false;
+          if (!f.date) return false;
+          // Extract just the date part (YYYY-MM-DD) from the form date
+          const formDateStr = f.date.split('T')[0];
+          return formDateStr === dateStr;
+        });
         const shiftLT3 = dayForms.filter(f => f.caseType === 'Shift<3').length;
         const shiftGT3 = dayForms.filter(f => f.caseType === 'Shift>3').length;
         const voluntary = dayForms.filter(f => f.caseType === 'Voluntary').length;
@@ -213,13 +219,17 @@ const PayrollPage: React.FC = () => {
           const dayName = getDayName(date);
           const callHour = getCallHour(rsa.id, date);
           // Only count forms for this day and this RSA
-          const d = date.getDate();
-          const m = date.getMonth() + 1;
-          const y = date.getFullYear();
-          // Compare by ID (createdById === rsa.id)
-          // Fallback: Try to get email from user object, or use username if email is missing
           const rsaId = rsa.id;
-          const dayForms = forms.filter(f => f.createdByUserId === parseInt(rsaId) && f.date && new Date(f.date).getFullYear() === y && new Date(f.date).getMonth() + 1 === m && new Date(f.date).getDate() === d);
+          // Create date string in YYYY-MM-DD format for comparison
+          const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+          // Compare date strings directly to avoid timezone issues
+          const dayForms = forms.filter(f => {
+            if (!f.createdByUserId || f.createdByUserId !== parseInt(rsaId)) return false;
+            if (!f.date) return false;
+            // Extract just the date part (YYYY-MM-DD) from the form date
+            const formDateStr = f.date.split('T')[0];
+            return formDateStr === dateStr;
+          });
           const shiftLT3 = dayForms.filter(f => f.caseType === 'Shift<3').length;
           const shiftGT3 = dayForms.filter(f => f.caseType === 'Shift>3').length;
           const voluntary = dayForms.filter(f => f.caseType === 'Voluntary').length;
