@@ -30,36 +30,20 @@ const CreateFormPage: React.FC = () => {
   const [procedure, setProcedure] = useState('');
   const [caseType, setCaseType] = useState(caseTypeOptions[0]);
   const [assistantType, setAssistantType] = useState(assistantTypeOptions[0]);
-  const [firstAssistant, setFirstAssistant] = useState('');
-  const [secondAssistant, setSecondAssistant] = useState('');
   const [surgeryFormFile, setSurgeryFormFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [healthCenters, setHealthCenters] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
   const navigate = useNavigate();
 
   // Get user role from localStorage (simulate for now)
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
 
   useEffect(() => {
-    // Fetch health centers
     fetch('/api/health-centers')
       .then(res => res.json())
       .then(setHealthCenters)
       .catch(() => setHealthCenters([]));
-    
-    // Fetch users for assistant dropdowns
-    fetch('/api/users')
-      .then(res => res.json())
-      .then(data => {
-        // Filter for RSAs and Team Leaders only
-        const assistants = data.filter((u: any) => 
-          u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'
-        );
-        setUsers(assistants);
-      })
-      .catch(() => setUsers([]));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,8 +75,6 @@ const CreateFormPage: React.FC = () => {
     formData.append('procedure', procedure);
     formData.append('caseType', caseType);
     formData.append('assistantType', assistantType);
-    formData.append('firstAssistant', firstAssistant);
-    formData.append('secondAssistant', secondAssistant);
     formData.append('status', 'pending');
     // Use user ID for dynamic linking
     const userId = localStorage.getItem('userId');
@@ -258,36 +240,6 @@ const CreateFormPage: React.FC = () => {
               required
               style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
             />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>1st Assistant</label>
-            <select
-              value={firstAssistant}
-              onChange={e => setFirstAssistant(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
-            >
-              <option value="">Select 1st Assistant (Optional)</option>
-              {users.map((user: any) => (
-                <option key={user.id} value={user.fullName || user.username}>
-                  {user.fullName || user.username}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>2nd Assistant</label>
-            <select
-              value={secondAssistant}
-              onChange={e => setSecondAssistant(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
-            >
-              <option value="">Select 2nd Assistant (Optional)</option>
-              {users.map((user: any) => (
-                <option key={user.id} value={user.fullName || user.username}>
-                  {user.fullName || user.username}
-                </option>
-              ))}
-            </select>
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Procedure</label>
