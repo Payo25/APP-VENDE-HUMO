@@ -160,7 +160,7 @@ const PayrollPage: React.FC = () => {
         const shiftGT3 = dayForms.filter(f => f.caseType === 'Shift>3').length;
         const voluntary = dayForms.filter(f => f.caseType === 'Voluntary').length;
         const cancelled = dayForms.filter(f => f.caseType === 'Cancelled').length;
-        totalCallHour += callHour ? parseInt(callHour) : 0;
+        totalCallHour += callHour ? parseFloat(callHour) : 0;
         totalShiftLT3 += shiftLT3;
         totalShiftGT3 += shiftGT3;
         totalVoluntary += voluntary;
@@ -237,7 +237,7 @@ const PayrollPage: React.FC = () => {
           return { date, dayName, callHour, shiftLT3, shiftGT3, voluntary, cancelled, debugForms: dayForms };
         });
         // Totals for the full range
-        const totalCallHour = rows.reduce((sum, r) => sum + (r.callHour ? parseInt(r.callHour) : 0), 0);
+        const totalCallHour = rows.reduce((sum, r) => sum + (r.callHour ? parseFloat(r.callHour) : 0), 0);
         const totalShiftLT3 = rows.reduce((sum, r) => sum + r.shiftLT3, 0);
         const totalShiftGT3 = rows.reduce((sum, r) => sum + r.shiftGT3, 0);
         const totalVoluntary = rows.reduce((sum, r) => sum + r.voluntary, 0);
