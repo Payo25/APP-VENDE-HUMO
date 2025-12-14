@@ -110,6 +110,7 @@ const ViewFormPage: React.FC = () => {
             <p><b>Time Out:</b> {form.timeOut}</p>
             <p><b>Doctor's Name:</b> {form.doctorName}</p>
             <p><b>Procedure:</b> {form.procedure}</p>
+            <p><b>Assistant Type:</b> {form.assistantType || 'N/A'}</p>
             <p><b>Case Type:</b> {form.caseType}</p>
             <p><b>Status:</b> {form.status}</p>
             <p><b>Created By:</b> {form.createdByFullName || form.createdBy}</p>

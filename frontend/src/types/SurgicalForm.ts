@@ -10,6 +10,7 @@ export interface SurgicalForm {
   doctorName: string;
   procedure: string;
   caseType: string;
+  assistantType?: string;
   status: string;
   createdBy: string;
   createdByUserId?: string;

@@ -40,6 +40,13 @@ async function migrateDatabase() {
       ADD COLUMN IF NOT EXISTS email VARCHAR(255);
     `);
     
+    // Add firstassistant and secondassistant columns to forms if they don't exist
+    await pool.query(`
+      ALTER TABLE forms 
+      ADD COLUMN IF NOT EXISTS firstassistant VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS secondassistant VARCHAR(255);
+    `);
+    
     console.log('✅ Database schema updated');
   } catch (err) {
     console.error('❌ Database migration error:', err.message);
@@ -241,6 +248,9 @@ app.get('/api/forms', async (req, res) => {
       doctorName: form.doctorname,
       procedure: form.procedure,
       caseType: form.casetype,
+      assistantType: form.assistanttype,
+      firstAssistant: form.firstassistant,
+      secondAssistant: form.secondassistant,
       status: form.status,
       createdBy: form.createdby, // legacy
       createdByUserId: form.createdbyuserid,
@@ -284,6 +294,9 @@ app.get('/api/forms/:id', async (req, res) => {
       doctorName: form.doctorname,
       procedure: form.procedure,
       caseType: form.casetype,
+      assistantType: form.assistanttype,
+      firstAssistant: form.firstassistant,
+      secondAssistant: form.secondassistant,
       status: form.status,
       createdBy: form.createdby, // legacy
       createdByUserId: form.createdbyuserid,
@@ -306,11 +319,11 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   
   const {
     patientName, dob, insuranceCompany,
-    healthCenterName, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, date
+    healthCenterName, timeIn, timeOut, doctorName, procedure, caseType, assistantType, firstAssistant, secondAssistant, status, createdByUserId, date
   } = req.body;
   
   // Validate required fields
-  if (!patientName || !dob || !insuranceCompany || !healthCenterName || !date || !doctorName || !procedure || !caseType || !status || !createdByUserId || !req.file || (caseType !== 'Cancelled' && (!timeIn || !timeOut))) {
+  if (!patientName || !dob || !insuranceCompany || !healthCenterName || !date || !doctorName || !procedure || !caseType || !assistantType || !status || !createdByUserId || !req.file || (caseType !== 'Cancelled' && (!timeIn || !timeOut))) {
     console.log('Validation failed:', {
       patientName: !!patientName,
       dob: !!dob,
@@ -340,9 +353,9 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
     
     console.log('Inserting into database...');
     const result = await pool.query(
-      `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, status, createdbyuserid, surgeryformfileurl, createdat)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, status, createdByUserId, fileUrl, new Date().toISOString()]
+      `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, assistanttype, firstassistant, secondassistant, status, createdbyuserid, surgeryformfileurl, createdat)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
     console.log('Form created successfully:', result.rows[0]);
     res.status(201).json(result.rows[0]);
@@ -368,6 +381,7 @@ app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => 
       doctorName: 'doctorname',
       procedure: 'procedure',
       caseType: 'casetype',
+      assistantType: 'assistanttype',
       status: 'status',
       createdBy: 'createdby',
       surgeryFormFileUrl: 'surgeryformfileurl',

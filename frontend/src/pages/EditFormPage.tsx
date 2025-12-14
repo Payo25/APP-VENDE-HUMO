@@ -180,6 +180,13 @@ const EditFormPage: React.FC = () => {
               <textarea name="procedure" value={form.procedure} onChange={handleChange} required rows={4} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box', resize: 'vertical' }} />
             </div>
             <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Assistant Type</label>
+              <select name="assistantType" value={form.assistantType || '1st Assistant'} onChange={handleChange} required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}>
+                <option value="1st Assistant">1st Assistant</option>
+                <option value="2nd Assistant">2nd Assistant</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Case Type</label>
               <select name="caseType" value={form.caseType} onChange={handleChange} required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="Regular">Regular</option>
