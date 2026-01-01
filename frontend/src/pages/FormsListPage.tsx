@@ -14,15 +14,34 @@ const FormsListPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const formsPerPage = 15;
   
+  // Load saved filters from sessionStorage
+  const savedFilters = sessionStorage.getItem('formsListFilters');
+  const initialFilters = savedFilters ? JSON.parse(savedFilters) : {};
+  
   // Filter states for all users
-  const [filterProcedure, setFilterProcedure] = useState('');
-  const [filterCaseType, setFilterCaseType] = useState('');
-  const [filterCreatedBy, setFilterCreatedBy] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>('');
-  const [sortDate, setSortDate] = useState<'asc' | 'desc' | ''>('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterProcedure, setFilterProcedure] = useState(initialFilters.filterProcedure || '');
+  const [filterCaseType, setFilterCaseType] = useState(initialFilters.filterCaseType || '');
+  const [filterCreatedBy, setFilterCreatedBy] = useState(initialFilters.filterCreatedBy || '');
+  const [filterStatus, setFilterStatus] = useState(initialFilters.filterStatus || '');
+  const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>(initialFilters.sortPatientAlpha || '');
+  const [sortDate, setSortDate] = useState<'asc' | 'desc' | ''>(initialFilters.sortDate || '');
+  const [filterDateFrom, setFilterDateFrom] = useState(initialFilters.filterDateFrom || '');
+  const [filterDateTo, setFilterDateTo] = useState(initialFilters.filterDateTo || '');
+
+  // Save filters to sessionStorage whenever they change
+  useEffect(() => {
+    const filters = {
+      filterProcedure,
+      filterCaseType,
+      filterCreatedBy,
+      filterStatus,
+      sortPatientAlpha,
+      sortDate,
+      filterDateFrom,
+      filterDateTo
+    };
+    sessionStorage.setItem('formsListFilters', JSON.stringify(filters));
+  }, [filterProcedure, filterCaseType, filterCreatedBy, filterStatus, sortPatientAlpha, sortDate, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetch(API_URL)
@@ -393,6 +412,7 @@ const FormsListPage: React.FC = () => {
                   setFilterDateTo('');
                   setSortPatientAlpha('');
                   setSortDate('');
+                  sessionStorage.removeItem('formsListFilters');
                 }}
                 style={{
                   width: '100%',
