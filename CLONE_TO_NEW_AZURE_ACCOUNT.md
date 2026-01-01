@@ -428,7 +428,7 @@ az webapp log tail `
 ```
 
 **Test in browser:**
-1. Navigate to: `https://surgical-backend-new.azurewebsites.net`
+1. Navigate to: `https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net`
 2. Login with: `admin@example.com` / `admin123`
 3. Verify:
    - ✅ Can view surgical forms

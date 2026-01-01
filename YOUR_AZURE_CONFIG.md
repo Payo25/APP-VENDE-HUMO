@@ -64,7 +64,7 @@ AZURE_STORAGE_CONTAINER_NAME=uploads
 # TWILIO_AUTH_TOKEN=
 # TWILIO_PHONE_FROM=
 # NOTIFICATION_PHONE_TO=
-# APP_URL=https://surgical-backend-new.azurewebsites.net
+# APP_URL=https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net
 ```
 
 ---

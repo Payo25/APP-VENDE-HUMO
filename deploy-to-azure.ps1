@@ -96,7 +96,7 @@ Write-Host "📊 Monitor deployment:" -ForegroundColor Cyan
 Write-Host "   GitHub Actions: https://github.com/Payo25/APP-VENDE-HUMO/actions" -ForegroundColor White
 Write-Host ""
 Write-Host "🌐 Your app will be available at:" -ForegroundColor Cyan
-Write-Host "   https://surgical-backend-new.azurewebsites.net" -ForegroundColor White
+Write-Host "   https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net" -ForegroundColor White
 Write-Host ""
 Write-Host "⏱️  Deployment typically takes 3-5 minutes..." -ForegroundColor Yellow
 Write-Host ""

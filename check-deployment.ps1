@@ -3,7 +3,7 @@
 Write-Host "🔍 Checking Azure App Service Status..." -ForegroundColor Cyan
 Write-Host ""
 
-$appUrl = "https://surgical-backend-new.azurewebsites.net"
+$appUrl = "https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net"
 $healthUrl = "$appUrl/api/health"
 
 Write-Host "📡 Testing health endpoint..." -ForegroundColor Yellow

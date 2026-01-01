@@ -59,6 +59,7 @@ const FormsReportPage: React.FC = () => {
       "Doctor's Name",
       'Procedure',
       'Case Type',
+      'Assistant Type',
       'Status',
       'Created By',
       'Created At',
@@ -78,6 +79,7 @@ const FormsReportPage: React.FC = () => {
         '"' + (form.doctorName || '') + '"',
         '"' + (form.procedure || '') + '"',
         '"' + (form.caseType || '') + '"',
+        '"' + (form.assistantType || '') + '"',
         '"' + (form.status || '') + '"',
         '"' + (form.createdByFullName || form.createdBy || '') + '"',
         '"' + (form.createdAt ? new Date(form.createdAt).toLocaleString() : '') + '"',
@@ -165,6 +167,7 @@ const FormsReportPage: React.FC = () => {
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Time Out</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Created By</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Created At</th>
+                <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Assistant Type</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Status</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Image</th>
               </tr>
@@ -172,7 +175,7 @@ const FormsReportPage: React.FC = () => {
             <tbody>
               {currentForms.length === 0 && (
                 <tr>
-                  <td colSpan={11} style={{ padding: 16, color: '#888' }}>No forms found.</td>
+                  <td colSpan={12} style={{ padding: 16, color: '#888' }}>No forms found.</td>
                 </tr>
               )}
               {currentForms.map(form => (
@@ -186,6 +189,7 @@ const FormsReportPage: React.FC = () => {
                   <td style={{ padding: 8 }}>{form.timeOut}</td>
                   <td style={{ padding: 8 }}>{form.createdByFullName || form.createdBy}</td>
                   <td style={{ padding: 8 }}>{form.createdAt ? new Date(form.createdAt).toLocaleString() : ''}</td>
+                  <td style={{ padding: 8 }}>{form.assistantType || ''}</td>
                   <td style={{ padding: 8 }}>{form.status}</td>
                   <td style={{ padding: 8 }}>
                     {form.surgeryFormFileUrl ? (

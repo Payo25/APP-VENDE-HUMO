@@ -121,7 +121,7 @@ TWILIO_PHONE_FROM=+1234567890
 NOTIFICATION_PHONE_TO=+1234567890
 
 # App URL (for email links)
-APP_URL=https://surgical-backend-new.azurewebsites.net
+APP_URL=https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net
 ```
 
 ## 🆘 Troubleshooting

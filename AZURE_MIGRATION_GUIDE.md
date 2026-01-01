@@ -286,7 +286,7 @@ git commit -m "Deploy to new Azure account"
 git push
 
 # Wait for deployment to complete, then test:
-# https://surgical-backend-new.azurewebsites.net
+# https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net
 ```
 
 ### 8.3 Verification Checklist
@@ -309,7 +309,7 @@ git push
 az webapp cors add `
   --name surgical-backend-new `
   --resource-group surgical-forms-rg `
-  --allowed-origins "https://surgical-backend-new.azurewebsites.net"
+  --allowed-origins "https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net"
 ```
 
 ### 9.2 Configure Custom Domain (Optional)

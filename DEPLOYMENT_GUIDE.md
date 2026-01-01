@@ -59,9 +59,9 @@ git push origin main
 
 Once deployment completes:
 
-1. **Visit your app**: https://surgical-backend-new.azurewebsites.net
+1. **Visit your app**: https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net
 
-2. **Test health endpoint**: https://surgical-backend-new.azurewebsites.net/api/health
+2. **Test health endpoint**: https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net/api/health
    - Should return: `{"status":"ok", ...}`
 
 3. **Login to app**:
@@ -144,8 +144,8 @@ If GitHub Actions isn't working:
 
 After successful deployment:
 
-- ✅ App URL: https://surgical-backend-new.azurewebsites.net
-- ✅ Health check: https://surgical-backend-new.azurewebsites.net/api/health
+- ✅ App URL: https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net
+- ✅ Health check: https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net/api/health
 - ✅ Login: admin@example.com / admin123
 
 **Important**: The first request after deployment may be slow (cold start). Wait 10-15 seconds.
