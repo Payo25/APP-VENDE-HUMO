@@ -24,6 +24,9 @@ const UserManagementPage: React.FC = () => {
   const [retypePassword, setRetypePassword] = useState('');
   const [passwordChangeError, setPasswordChangeError] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('');
+  const [reassignUser, setReassignUser] = useState<any>(null);
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
+  const [reassignError, setReassignError] = useState('');
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
 
@@ -95,7 +98,52 @@ const UserManagementPage: React.FC = () => {
       setUsers(users.filter(u => u.id !== id));
     } else {
       const errorData = await res.json().catch(() => ({}));
-      setError(errorData.error || 'Failed to delete user.');
+      if (errorData.formsCount && errorData.formsCount > 0) {
+        // Show reassignment dialog
+        const userToDelete = users.find(u => u.id === id);
+        setReassignUser(userToDelete);
+        setReassignError('');
+      } else {
+        setError(errorData.error || 'Failed to delete user.');
+      }
+    }
+  };
+
+  const handleReassignAndDelete = async () => {
+    if (!reassignUser || !selectedTargetUserId) {
+      setReassignError('Please select a user to reassign forms to.');
+      return;
+    }
+
+    try {
+      // Step 1: Reassign forms
+      const reassignRes = await fetch(`${API_URL}/${reassignUser.id}/reassign-forms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: selectedTargetUserId }),
+      });
+
+      if (!reassignRes.ok) {
+        const errorData = await reassignRes.json();
+        setReassignError(errorData.error || 'Failed to reassign forms.');
+        return;
+      }
+
+      const reassignData = await reassignRes.json();
+
+      // Step 2: Delete user
+      const deleteRes = await fetch(`${API_URL}/${reassignUser.id}`, { method: 'DELETE' });
+      
+      if (deleteRes.ok) {
+        setSuccess(`${reassignData.message}. User deleted successfully.`);
+        setUsers(users.filter(u => u.id !== reassignUser.id));
+        setReassignUser(null);
+        setSelectedTargetUserId('');
+      } else {
+        setReassignError('Forms reassigned but failed to delete user.');
+      }
+    } catch (err) {
+      setReassignError('An error occurred during reassignment.');
     }
   };
 
@@ -531,6 +579,109 @@ const UserManagementPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Reassign Forms Modal */}
+      {reassignUser && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setReassignUser(null)}
+        >
+          <div
+            className="responsive-card"
+            style={{ maxWidth: 500, width: '90%', maxHeight: '80vh', overflow: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: 16 }}>Reassign Forms</h3>
+            <p style={{ marginBottom: 16 }}>
+              User <strong>{reassignUser.fullName}</strong> has created forms. 
+              Please select another user to reassign these forms to before deletion.
+            </p>
+            
+            {reassignError && (
+              <div style={{ color: 'red', marginBottom: 16, padding: 12, background: '#fee', borderRadius: 6 }}>
+                {reassignError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>
+                Reassign forms to:
+              </label>
+              <select
+                value={selectedTargetUserId}
+                onChange={(e) => setSelectedTargetUserId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  borderRadius: 6,
+                  border: '1px solid #ddd',
+                  fontSize: 14,
+                  outline: 'none'
+                }}
+              >
+                <option value="">-- Select User --</option>
+                {users
+                  .filter(u => u.id !== reassignUser.id)
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.fullName} ({u.role})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => {
+                  setReassignUser(null);
+                  setSelectedTargetUserId('');
+                  setReassignError('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px 0',
+                  background: '#6c757d',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReassignAndDelete}
+                style={{
+                  flex: 1,
+                  padding: '12px 0',
+                  background: 'linear-gradient(90deg, #e74c3c 0%, #e67e22 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Reassign & Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

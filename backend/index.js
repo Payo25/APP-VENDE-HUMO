@@ -477,6 +477,39 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
+// --- Reassign forms from one user to another ---
+app.post('/api/users/:id/reassign-forms', async (req, res) => {
+  try {
+    const fromUserId = req.params.id;
+    const { targetUserId } = req.body;
+    
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'Target user ID is required.' });
+    }
+
+    // Check if target user exists
+    const targetUser = await pool.query('SELECT id FROM users WHERE id = $1', [targetUserId]);
+    if (targetUser.rows.length === 0) {
+      return res.status(400).json({ error: 'Target user does not exist.' });
+    }
+
+    // Reassign all forms
+    const result = await pool.query(
+      'UPDATE forms SET createdbyuserid = $1, lastmodified = $2 WHERE createdbyuserid = $3',
+      [targetUserId, new Date().toISOString(), fromUserId]
+    );
+
+    res.json({ 
+      success: true, 
+      reassignedCount: result.rowCount,
+      message: `Successfully reassigned ${result.rowCount} form(s)` 
+    });
+  } catch (err) {
+    console.error('Error reassigning forms:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.delete('/api/users/:id', async (req, res) => {
   try {
     // Check if user has created any forms
@@ -488,7 +521,8 @@ app.delete('/api/users/:id', async (req, res) => {
     
     if (formsCount > 0) {
       return res.status(400).json({ 
-        error: `Cannot delete user. This user has created ${formsCount} form(s). Please reassign or delete those forms first.` 
+        error: `Cannot delete user. This user has created ${formsCount} form(s). Please reassign or delete those forms first.`,
+        formsCount: formsCount
       });
     }
 
