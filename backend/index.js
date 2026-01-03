@@ -479,9 +479,23 @@ app.put('/api/users/:id', async (req, res) => {
 
 app.delete('/api/users/:id', async (req, res) => {
   try {
+    // Check if user has created any forms
+    const formsCheck = await pool.query(
+      'SELECT COUNT(*) FROM forms WHERE createdbyuserid = $1',
+      [req.params.id]
+    );
+    const formsCount = parseInt(formsCheck.rows[0].count);
+    
+    if (formsCount > 0) {
+      return res.status(400).json({ 
+        error: `Cannot delete user. This user has created ${formsCount} form(s). Please reassign or delete those forms first.` 
+      });
+    }
+
     await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (err) {
+    console.error('Error deleting user:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });

@@ -94,7 +94,8 @@ const UserManagementPage: React.FC = () => {
       setSuccess('User deleted.');
       setUsers(users.filter(u => u.id !== id));
     } else {
-      setError('Failed to delete user.');
+      const errorData = await res.json().catch(() => ({}));
+      setError(errorData.error || 'Failed to delete user.');
     }
   };
 
