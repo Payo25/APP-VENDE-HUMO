@@ -22,8 +22,6 @@ const PayrollPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [forms, setForms] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<{ [day: string]: string[] }>({});
-  const [month] = useState(new Date().getMonth() + 1);
-  const [year] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,20 +32,58 @@ const PayrollPage: React.FC = () => {
   useEffect(() => {
     if (userRole !== 'Business Assistant') return;
     setLoading(true);
+    
+    // Fetch users and forms first
     Promise.all([
       fetch(USERS_API_URL).then(res => res.json()),
-      fetch(FORMS_API_URL).then(res => res.json()),
-      fetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`).then(res => res.json())
-    ]).then(([usersData, formsData, assignmentsData]) => {
+      fetch(FORMS_API_URL).then(res => res.json())
+    ]).then(([usersData, formsData]) => {
       setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
       setForms(formsData);
-      setAssignments(assignmentsData);
       setLoading(false);
     }).catch(() => {
       setError('Failed to load data.');
       setLoading(false);
     });
-  }, [userRole, month, year]);
+  }, [userRole]);
+
+  // Fetch call hours when date range changes
+  useEffect(() => {
+    if (!fromDate || !toDate || userRole !== 'Business Assistant') return;
+    
+    const from = parseDate(fromDate);
+    const to = parseDate(toDate);
+    
+    // Get all unique month/year combinations in the date range
+    const monthsToFetch = new Set<string>();
+    let currentDate = new Date(from);
+    while (currentDate <= to) {
+      const month = currentDate.getMonth() + 1;
+      const year = currentDate.getFullYear();
+      monthsToFetch.add(`${year}-${month}`);
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      currentDate.setDate(1); // Reset to first day of month
+    }
+    
+    // Fetch call hours for all relevant months
+    const callHoursPromises = Array.from(monthsToFetch).map(key => {
+      const [year, month] = key.split('-');
+      return fetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`)
+        .then(res => res.json())
+        .catch(() => ({}));
+    });
+    
+    Promise.all(callHoursPromises).then(results => {
+      // Merge all assignments into one object
+      const mergedAssignments: { [day: string]: string[] } = {};
+      results.forEach(result => {
+        Object.assign(mergedAssignments, result);
+      });
+      setAssignments(mergedAssignments);
+    }).catch(() => {
+      setError('Failed to load call hours data.');
+    });
+  }, [fromDate, toDate, userRole]);
 
   // Helper: parse date string to Date object
   const parseDate = (str: string) => {
@@ -89,13 +125,6 @@ const PayrollPage: React.FC = () => {
 
   if (userRole !== 'Business Assistant') {
     return <div className="responsive-card" style={{ marginTop: 40 }}><h2>RSA Bi-Weekly Report</h2><div style={{ color: 'red', marginBottom: 24 }}>Access denied. Only Business Assistants can view this report.</div><button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(90,103,216,0.08)', transition: 'background 0.2s', marginBottom: 16 }}>← Back to Dashboard</button></div>;
-  }
-
-  // Helper: get all dates in month
-  const daysInMonth = getDaysInMonth(month, year);
-  const allDates: Date[] = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    allDates.push(new Date(year, month - 1, d));
   }
 
   // Helper: get call hour for a day (using ISO date string key)
