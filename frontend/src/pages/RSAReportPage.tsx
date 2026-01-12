@@ -8,10 +8,6 @@ const FORMS_API_URL = `${API_BASE_URL}/forms`;
 const USERS_API_URL = `${API_BASE_URL}/users`;
 const CALL_HOURS_API_URL = `${API_BASE_URL}/call-hours`;
 
-const getDaysInMonth = (month: number, year: number) => {
-  return new Date(year, month, 0).getDate();
-};
-
 const getDayName = (date: Date) => {
   return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 };
