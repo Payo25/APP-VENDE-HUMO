@@ -82,9 +82,10 @@ const EditFormPage: React.FC = () => {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)' }}>
         <div style={{ background: '#fff', padding: '2.5rem 2rem', borderRadius: '1rem', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', minWidth: 320, maxWidth: 600, width: '100%', textAlign: 'center' }}>
-          <a href="/forms" style={{ display: 'inline-block', marginBottom: 24, padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, textDecoration: 'none', boxShadow: '0 2px 8px rgba(90,103,216,0.08)', transition: 'background 0.2s', width: '100%' }}>← Back to Forms</a>
+          <a href="/dashboard" style={{ display: 'inline-block', marginBottom: 24, padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, textDecoration: 'none', boxShadow: '0 2px 8px rgba(90,103,216,0.08)', transition: 'background 0.2s', width: '100%' }}>← Back to Dashboard</a>
           <div style={{ color: '#e74c3c', marginBottom: 24 }}>
             Only Registered Surgical Assistants and Business Assistants can edit surgical forms.
+            {userRole === 'Scheduler' && ' Schedulers can manage Health Centers and Call Hours.'}
           </div>
         </div>
       </div>

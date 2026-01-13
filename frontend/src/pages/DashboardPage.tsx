@@ -39,42 +39,46 @@ const DashboardPage: React.FC = () => {
         <h2 tabIndex={0}>Dashboard</h2>
         <p style={{ color: '#4a5568', marginBottom: 32 }}>Welcome{userFullName ? `, ${userFullName}!` : '!'}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
-          <a href="/forms" style={{
-            display: 'inline-block',
-            padding: '12px 0',
-            background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontSize: 16,
-            fontWeight: 600,
-            textDecoration: 'none',
-            boxShadow: '0 2px 8px rgba(90,103,216,0.08)',
-            transition: 'background 0.2s',
-          }}
-          tabIndex={0}
-          aria-label="View Surgical Forms"
-          >
-            View Surgical Forms
-          </a>
-          <a href="/forms/create" style={{
-            display: 'inline-block',
-            padding: '12px 0',
-            background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontSize: 16,
-            fontWeight: 600,
-            textDecoration: 'none',
-            boxShadow: '0 2px 8px rgba(67,206,162,0.08)',
-            transition: 'background 0.2s',
-          }}
-          tabIndex={0}
-          aria-label="Create New Surgical Form"
-          >
-            Create New Surgical Form
-          </a>
+          {localStorage.getItem('role') !== 'Scheduler' && (
+            <>
+              <a href="/forms" style={{
+                display: 'inline-block',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(90,103,216,0.08)',
+                transition: 'background 0.2s',
+              }}
+              tabIndex={0}
+              aria-label="View Surgical Forms"
+              >
+                View Surgical Forms
+              </a>
+              <a href="/forms/create" style={{
+                display: 'inline-block',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(67,206,162,0.08)',
+                transition: 'background 0.2s',
+              }}
+              tabIndex={0}
+              aria-label="Create New Surgical Form"
+              >
+                Create New Surgical Form
+              </a>
+            </>
+          )}
           {localStorage.getItem('role') === 'Admin' && (
             <a href="/users" style={{
               display: 'inline-block',
@@ -155,7 +159,7 @@ const DashboardPage: React.FC = () => {
               Surgical Forms Report
             </a>
           )}
-          {localStorage.getItem('role') === 'Business Assistant' && (
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Scheduler') && (
             <a href="/health-centers" style={{
               display: 'inline-block',
               padding: '12px 0',

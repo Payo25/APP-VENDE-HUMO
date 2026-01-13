@@ -14,6 +14,19 @@ const FormsListPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const formsPerPage = 15;
   
+  // Block Schedulers from accessing forms
+  if (userRole === 'Scheduler') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="responsive-card" style={{ maxWidth: 600, textAlign: 'center' }}>
+          <h2>Access Denied</h2>
+          <div style={{ color: 'red', marginBottom: 24 }}>Schedulers cannot view surgical forms. You can manage Health Centers and Call Hours.</div>
+          <button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>← Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
+  
   // Load saved filters from sessionStorage
   const savedFilters = sessionStorage.getItem('formsListFilters');
   const initialFilters = savedFilters ? JSON.parse(savedFilters) : {};
