@@ -6,26 +6,13 @@ const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
 
 const FormsListPage: React.FC = () => {
+  const navigate = useNavigate();
+  const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
   const [forms, setForms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
-  const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
   const [currentPage, setCurrentPage] = useState(1);
   const formsPerPage = 15;
-  
-  // Block Schedulers from accessing forms
-  if (userRole === 'Scheduler') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="responsive-card" style={{ maxWidth: 600, textAlign: 'center' }}>
-          <h2>Access Denied</h2>
-          <div style={{ color: 'red', marginBottom: 24 }}>Schedulers cannot view surgical forms. You can manage Health Centers and Call Hours.</div>
-          <button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>← Back to Dashboard</button>
-        </div>
-      </div>
-    );
-  }
   
   // Load saved filters from sessionStorage
   const savedFilters = sessionStorage.getItem('formsListFilters');
@@ -189,6 +176,19 @@ const FormsListPage: React.FC = () => {
   const indexOfFirstForm = indexOfLastForm - formsPerPage;
   const currentForms = filteredForms.slice(indexOfFirstForm, indexOfLastForm);
   const totalPages = Math.ceil(filteredForms.length / formsPerPage);
+
+  // Block Schedulers from accessing forms
+  if (userRole === 'Scheduler') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="responsive-card" style={{ maxWidth: 600, textAlign: 'center' }}>
+          <h2>Access Denied</h2>
+          <div style={{ color: 'red', marginBottom: 24 }}>Schedulers cannot view surgical forms. You can manage Health Centers and Call Hours.</div>
+          <button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>← Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

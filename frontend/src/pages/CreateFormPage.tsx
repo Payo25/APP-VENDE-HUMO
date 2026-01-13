@@ -19,6 +19,7 @@ const assistantTypeOptions = [
 ];
 
 const CreateFormPage: React.FC = () => {
+  const navigate = useNavigate();
   const [patientName, setPatientName] = useState('');
   const [dob, setDob] = useState('');
   const [insuranceCompany, setInsuranceCompany] = useState('');
@@ -34,23 +35,9 @@ const CreateFormPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [healthCenters, setHealthCenters] = useState<any[]>([]);
-  const navigate = useNavigate();
 
   // Get user role from localStorage (simulate for now)
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
-
-  // Block Schedulers from accessing forms
-  if (userRole === 'Scheduler') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="responsive-card" style={{ maxWidth: 600, textAlign: 'center' }}>
-          <h2>Access Denied</h2>
-          <div style={{ color: 'red', marginBottom: 24 }}>Schedulers cannot create surgical forms. You can manage Health Centers and Call Hours.</div>
-          <button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>← Back to Dashboard</button>
-        </div>
-      </div>
-    );
-  }
 
   useEffect(() => {
     fetch('/api/health-centers')
@@ -120,6 +107,19 @@ const CreateFormPage: React.FC = () => {
       setError('Failed to create form.');
     }
   };
+
+  // Block Schedulers from accessing forms
+  if (userRole === 'Scheduler') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="responsive-card" style={{ maxWidth: 600, textAlign: 'center' }}>
+          <h2>Access Denied</h2>
+          <div style={{ color: 'red', marginBottom: 24 }}>Schedulers cannot create surgical forms. You can manage Health Centers and Call Hours.</div>
+          <button onClick={() => navigate('/dashboard')} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>← Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
