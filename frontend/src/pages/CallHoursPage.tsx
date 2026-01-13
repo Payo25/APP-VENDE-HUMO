@@ -306,7 +306,7 @@ cells.push(
                                       >
                                         {rsa.fullName || rsa.username}
                                       </span>
-                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode && (
+                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode && (
                                         <button
                                           onClick={() => handleRemoveRSA(thisDay, a.id)}
                                           style={{
@@ -324,7 +324,7 @@ cells.push(
                                       )}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode ? (
+                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
                                         <>
                                           <span style={{ fontSize: 12, color: '#666' }}>Quick:</span>
                                           <select
@@ -369,8 +369,8 @@ cells.push(
                                 );
                               })}
                             </ul>
-                            {/* Only BAs and Team Leaders (and not exporting PDF) see the +Add RSA dropdown */}
-                            {(userRole === 'Business Assistant' || userRole === 'Team Leader') && !exportingPDF && isEditMode && (
+                            {/* Only BAs, Team Leaders, and Schedulers (and not exporting PDF) see the +Add RSA dropdown */}
+                            {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode && (
                               <select
                                 value=""
                                 onChange={e => { if (e.target.value) handleAddRSA(thisDay, e.target.value); }}
@@ -395,7 +395,7 @@ cells.push(
             </table>
           )}
         </div>
-        {(userRole === 'Business Assistant' || userRole === 'Team Leader') && (
+        {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && (
           <div style={{ display: 'flex', gap: 12, marginTop: 24, alignItems: 'center' }}>
             {!isEditMode && hasSavedData && (
               <button

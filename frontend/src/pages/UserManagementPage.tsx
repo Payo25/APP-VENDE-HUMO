@@ -410,6 +410,7 @@ const UserManagementPage: React.FC = () => {
                       >
                         <option value="Admin">Admin</option>
                         <option value="Business Assistant">Business Assistant</option>
+                        <option value="Scheduler">Scheduler</option>
                         <option value="Team Leader">Team Leader</option>
                         <option value="Registered Surgical Assistant">Registered Surgical Assistant</option>
                       </select>
@@ -553,6 +554,7 @@ const UserManagementPage: React.FC = () => {
                 >
                   <option value="Admin">Admin</option>
                   <option value="Business Assistant">Business Assistant</option>
+                  <option value="Scheduler">Scheduler</option>
                   <option value="Team Leader">Team Leader</option>
                   <option value="Registered Surgical Assistant">Registered Surgical Assistant</option>
                 </select>
