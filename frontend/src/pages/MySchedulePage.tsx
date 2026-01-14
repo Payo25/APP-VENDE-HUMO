@@ -5,7 +5,6 @@ import html2canvas from 'html2canvas';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/call-hours`;
-const USERS_API_URL = `${API_BASE_URL}/users`;
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
