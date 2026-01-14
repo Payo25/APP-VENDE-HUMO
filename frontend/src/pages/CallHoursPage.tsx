@@ -24,7 +24,7 @@ const getDateString = (year: number, month: number, day: number) => {
 
 const CallHoursPage: React.FC = () => {
   const userRole = localStorage.getItem('role');
-  const userId = localStorage.getItem('user');
+  const userId = localStorage.getItem('userId');
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -39,6 +39,7 @@ const CallHoursPage: React.FC = () => {
   const [editTimeModal, setEditTimeModal] = useState<{ day: number, rsaId: string, rsaName: string } | null>(null);
   const [tempHours, setTempHours] = useState(24);
   const [tempMinutes, setTempMinutes] = useState(0);
+  const [viewMode, setViewMode] = useState<'full' | 'personal'>('full');
   const navigate = useNavigate();
 
   // Fetch all RSAs and Team Leaders for BA/Team Leader, or just self for RSA
@@ -202,32 +203,70 @@ const CallHoursPage: React.FC = () => {
         </button>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{ margin: 0 }}>Call Hours Monthly Planner</h2>
-          {!loading && hasSavedData && !isEditMode && (
-            <span style={{ 
-              padding: '6px 12px', 
-              borderRadius: 6, 
-              background: '#e8f5e9', 
-              color: '#2e7d32', 
-              fontSize: 14, 
-              fontWeight: 600 
-            }}>
-              ✓ Viewing Saved Schedule
-            </span>
-          )}
-          {!loading && isEditMode && hasSavedData && (
-            <span style={{ 
-              padding: '6px 12px', 
-              borderRadius: 6, 
-              background: '#fff3e0', 
-              color: '#e65100', 
-              fontSize: 14, 
-              fontWeight: 600 
-            }}>
-              ✏️ Edit Mode
-            </span>
-          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {userRole === 'Registered Surgical Assistant' && viewMode === 'personal' && (
+              <span style={{ 
+                padding: '6px 12px', 
+                borderRadius: 6, 
+                background: '#e3f2fd', 
+                color: '#1565c0', 
+                fontSize: 14, 
+                fontWeight: 600 
+              }}>
+                👤 My Schedule
+              </span>
+            )}
+            {!loading && hasSavedData && !isEditMode && (
+              <span style={{ 
+                padding: '6px 12px', 
+                borderRadius: 6, 
+                background: '#e8f5e9', 
+                color: '#2e7d32', 
+                fontSize: 14, 
+                fontWeight: 600 
+              }}>
+                ✓ Viewing Saved Schedule
+              </span>
+            )}
+            {!loading && isEditMode && hasSavedData && (
+              <span style={{ 
+                padding: '6px 12px', 
+                borderRadius: 6, 
+                background: '#fff3e0', 
+                color: '#e65100', 
+                fontSize: 14, 
+                fontWeight: 600 
+              }}>
+                ✏️ Edit Mode
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {userRole === 'Registered Surgical Assistant' && (
+              <button
+                onClick={() => setViewMode(viewMode === 'full' ? 'personal' : 'full')}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: 6,
+                  background: viewMode === 'personal' 
+                    ? 'linear-gradient(90deg, #1976d2 0%, #1565c0 100%)' 
+                    : 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: 15,
+                  cursor: 'pointer',
+                  marginBottom: 0
+                }}
+                tabIndex={0}
+                aria-label={viewMode === 'full' ? 'View My Schedule' : 'View Full Schedule'}
+              >
+                {viewMode === 'full' ? '👤 My Schedule' : '📅 Full Schedule'}
+              </button>
+            )}
+          </div>
           <button
             onClick={handleDownloadPDF}
             style={{
@@ -284,12 +323,28 @@ const CallHoursPage: React.FC = () => {
                         cells.push(<td key={d} style={{ padding: 8, minHeight: 80, background: '#f6f8fa' }} />);
                       } else {
                         const thisDay = day;
-const dateKey = getDateString(year, month, thisDay);
-cells.push(
-                          <td key={d} style={{ padding: 8, minHeight: 80, border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                        const dateKey = getDateString(year, month, thisDay);
+                        const dayAssignments = assignments[dateKey] || [];
+                        
+                        // Filter assignments based on view mode
+                        const filteredAssignments = viewMode === 'personal' && userRole === 'Registered Surgical Assistant'
+                          ? dayAssignments.filter((a: any) => String(a.id) === String(userId))
+                          : dayAssignments;
+                        
+                        const hasMyAssignment = userRole === 'Registered Surgical Assistant' && 
+                          dayAssignments.some((a: any) => String(a.id) === String(userId));
+                        
+                        cells.push(
+                          <td key={d} style={{ 
+                            padding: 8, 
+                            minHeight: 80, 
+                            border: '1px solid #e2e8f0', 
+                            verticalAlign: 'top',
+                            background: viewMode === 'personal' && hasMyAssignment ? '#e3f2fd' : 'transparent'
+                          }}>
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{thisDay}</div>
                             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                              {(assignments[dateKey] || []).map((a: any) => {
+                              {filteredAssignments.map((a: any) => {
                                 const rsa = users.find(u => String(u.id) === String(a.id));
                                 if (!rsa) return null;
                                 return (
