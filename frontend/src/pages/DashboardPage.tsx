@@ -179,6 +179,26 @@ const DashboardPage: React.FC = () => {
               Manage Health Centers
             </a>
           )}
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Scheduler') && (
+            <a href="/physicians" style={{
+              display: 'inline-block',
+              padding: '12px 0',
+              background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 16,
+              fontWeight: 600,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(90,103,216,0.08)',
+              transition: 'background 0.2s',
+            }}
+            tabIndex={0}
+            aria-label="Manage Physicians"
+            >
+              Manage Physicians
+            </a>
+          )}
         </div>
         {localStorage.getItem('role') === 'Registered Surgical Assistant' && (
           <button

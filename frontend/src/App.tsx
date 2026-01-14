@@ -14,6 +14,7 @@ import MySchedulePage from './pages/MySchedulePage';
 import PayrollPage from './pages/RSAReportPage';
 import FormsReportPage from './pages/FormsReportPage';
 import HealthCentersPage from './pages/HealthCentersPage';
+import PhysiciansPage from './pages/PhysiciansPage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -119,6 +120,14 @@ function App() {
           />
           <Route path="/forms-report" element={<FormsReportPage />} />
           <Route path="/health-centers" element={<HealthCentersPage />} />
+          <Route
+            path="/physicians"
+            element={
+              <ProtectedRoute>
+                <PhysiciansPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Router>

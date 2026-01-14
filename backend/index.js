@@ -32,6 +32,19 @@ async function migrateDatabase() {
   try {
     console.log('🔄 Checking database schema...');
     
+    // Create physicians table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS physicians (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        specialty VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
     // Add contact_person, fax and email columns to health_centers if they don't exist
     await pool.query(`
       ALTER TABLE health_centers 
@@ -707,6 +720,55 @@ app.put('/api/health-centers/:id', async (req, res) => {
 app.delete('/api/health-centers/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM health_centers WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// ========== PHYSICIANS ENDPOINTS ==========
+app.get('/api/physicians', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM physicians ORDER BY name');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/physicians', async (req, res) => {
+  const { name, specialty, phone, email } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO physicians (name, specialty, phone, email) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, specialty, phone || '', email || '']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      res.status(400).json({ error: 'Physician already exists' });
+    } else {
+      res.status(500).json({ error: 'Database error' });
+    }
+  }
+});
+
+app.put('/api/physicians/:id', async (req, res) => {
+  const { name, specialty, phone, email } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE physicians SET name=$1, specialty=$2, phone=$3, email=$4, lastmodified=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
+      [name, specialty, phone || '', email || '', req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/physicians/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM physicians WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
