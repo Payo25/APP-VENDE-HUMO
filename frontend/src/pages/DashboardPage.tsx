@@ -180,6 +180,27 @@ const DashboardPage: React.FC = () => {
             </a>
           )}
         </div>
+        {localStorage.getItem('role') === 'Registered Surgical Assistant' && (
+          <button
+            onClick={() => navigate('/call-hours-personal')}
+            style={{
+              width: '100%',
+              padding: '12px 0',
+              background: 'linear-gradient(90deg, #1976d2 0%, #1565c0 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(25,118,210,0.08)',
+              transition: 'background 0.2s',
+              marginBottom: 12
+            }}
+          >
+            📅 My Schedule
+          </button>
+        )}
         <button
           onClick={() => navigate('/call-hours')}
           style={{

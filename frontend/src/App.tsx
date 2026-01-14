@@ -10,6 +10,7 @@ import ViewFormPage from './pages/ViewFormPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import CallHoursPage from './pages/CallHoursPage';
+import MySchedulePage from './pages/MySchedulePage';
 import PayrollPage from './pages/RSAReportPage';
 import FormsReportPage from './pages/FormsReportPage';
 import HealthCentersPage from './pages/HealthCentersPage';
@@ -100,6 +101,14 @@ function App() {
             }
           />
           <Route path="/call-hours" element={<CallHoursPage />} />
+          <Route
+            path="/call-hours-personal"
+            element={
+              <ProtectedRoute>
+                <MySchedulePage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/rsa-report"
             element={
