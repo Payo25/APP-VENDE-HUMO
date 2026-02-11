@@ -16,6 +16,7 @@ import PayrollPage from './pages/RSAReportPage';
 import FormsReportPage from './pages/FormsReportPage';
 import HealthCentersPage from './pages/HealthCentersPage';
 import PhysiciansPage from './pages/PhysiciansPage';
+import RsaEmailsPage from './pages/RsaEmailsPage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -134,6 +135,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PhysiciansPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rsa-emails"
+            element={
+              <ProtectedRoute>
+                <RsaEmailsPage />
               </ProtectedRoute>
             }
           />

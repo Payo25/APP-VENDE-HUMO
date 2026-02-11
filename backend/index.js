@@ -91,6 +91,19 @@ async function migrateDatabase() {
       ADD COLUMN IF NOT EXISTS firstassistant VARCHAR(255),
       ADD COLUMN IF NOT EXISTS secondassistant VARCHAR(255);
     `);
+
+    // Create rsa_emails table for managing RSA notification emails
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rsa_emails (
+        id SERIAL PRIMARY KEY,
+        rsa_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        notes TEXT,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
     
     console.log('✅ Database schema updated');
   } catch (err) {
@@ -856,6 +869,53 @@ app.put('/api/personal-schedules/:id', async (req, res) => {
 app.delete('/api/personal-schedules/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM personal_schedules WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// ========== RSA EMAILS ENDPOINTS ==========
+app.get('/api/rsa-emails', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM rsa_emails ORDER BY rsa_name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/rsa-emails', async (req, res) => {
+  const { rsaName, email, phone, notes } = req.body;
+  if (!rsaName || !email) return res.status(400).json({ error: 'Name and email are required' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO rsa_emails (rsa_name, email, phone, notes) VALUES ($1, $2, $3, $4) RETURNING *',
+      [rsaName, email, phone || '', notes || '']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/rsa-emails/:id', async (req, res) => {
+  const { rsaName, email, phone, notes } = req.body;
+  if (!rsaName || !email) return res.status(400).json({ error: 'Name and email are required' });
+  try {
+    const result = await pool.query(
+      'UPDATE rsa_emails SET rsa_name=$1, email=$2, phone=$3, notes=$4, lastmodified=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
+      [rsaName, email, phone || '', notes || '', req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/rsa-emails/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM rsa_emails WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
