@@ -57,9 +57,13 @@ async function migrateDatabase() {
         physician_name VARCHAR(255),
         health_center_name VARCHAR(255),
         createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, schedule_date)
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Drop the unique constraint if it exists (allow multiple entries per day)
+    await pool.query(`
+      ALTER TABLE personal_schedules DROP CONSTRAINT IF EXISTS personal_schedules_user_id_schedule_date_key;
     `);
 
     // Add physician_name and health_center_name columns if they don't exist
@@ -808,7 +812,7 @@ app.get('/api/personal-schedules', async (req, res) => {
        WHERE user_id=$1 
        AND EXTRACT(MONTH FROM schedule_date)=$2 
        AND EXTRACT(YEAR FROM schedule_date)=$3
-       ORDER BY schedule_date`,
+       ORDER BY schedule_date, id`,
       [userId, month, year]
     );
     res.json(result.rows);
@@ -823,8 +827,6 @@ app.post('/api/personal-schedules', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO personal_schedules (user_id, schedule_date, hours, minutes, notes, physician_name, health_center_name) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       ON CONFLICT (user_id, schedule_date) 
-       DO UPDATE SET hours=$3, minutes=$4, notes=$5, physician_name=$6, health_center_name=$7, lastmodified=CURRENT_TIMESTAMP
        RETURNING *`,
       [userId, scheduleDate, hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '']
     );

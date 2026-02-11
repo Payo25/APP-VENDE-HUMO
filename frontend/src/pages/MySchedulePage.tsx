@@ -78,17 +78,32 @@ const MySchedulePage: React.FC = () => {
     setSuccess('');
     
     try {
-      const res = await fetch(PERSONAL_SCHEDULES_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          scheduleDate: editModal.date,
-          hours: tempHours,
-          minutes: tempMinutes,
-          notes: tempNotes
-        })
-      });
+      let res;
+      if (editModal.entry) {
+        // Edit existing entry via PUT
+        res = await fetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hours: tempHours,
+            minutes: tempMinutes,
+            notes: tempNotes
+          })
+        });
+      } else {
+        // Add new entry via POST
+        res = await fetch(PERSONAL_SCHEDULES_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            scheduleDate: editModal.date,
+            hours: tempHours,
+            minutes: tempMinutes,
+            notes: tempNotes
+          })
+        });
+      }
       
       if (res.ok) {
         setSuccess(editModal.entry ? 'Schedule updated!' : 'Schedule added!');
@@ -152,11 +167,13 @@ const MySchedulePage: React.FC = () => {
 
   const daysInMonth = getDaysInMonth(month, year);
 
-  // Create a map of schedules by date for easy lookup
+  // Create a map of schedules by date for easy lookup (multiple entries per day)
   const schedulesByDate = schedules.reduce((acc, schedule) => {
-    acc[schedule.schedule_date] = schedule;
+    const key = schedule.schedule_date;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(schedule);
     return acc;
-  }, {} as { [date: string]: ScheduleEntry });
+  }, {} as { [date: string]: ScheduleEntry[] });
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -252,7 +269,7 @@ const MySchedulePage: React.FC = () => {
                       } else {
                         const thisDay = day;
                         const dateKey = getDateString(year, month, thisDay);
-                        const scheduleEntry = schedulesByDate[dateKey];
+                        const dayEntries = schedulesByDate[dateKey] || [];
                         
                         cells.push(
                           <td key={d} style={{ 
@@ -260,45 +277,45 @@ const MySchedulePage: React.FC = () => {
                             minHeight: 120, 
                             border: '1px solid #e2e8f0', 
                             verticalAlign: 'top',
-                            background: scheduleEntry ? '#e3f2fd' : 'transparent'
+                            background: dayEntries.length > 0 ? '#e3f2fd' : 'transparent'
                           }}>
-                            <div style={{ fontWeight: 600, marginBottom: 8, color: scheduleEntry ? '#1565c0' : 'inherit' }}>{thisDay}</div>
-                            {scheduleEntry ? (
-                              <div>
+                            <div style={{ fontWeight: 600, marginBottom: 8, color: dayEntries.length > 0 ? '#1565c0' : 'inherit' }}>{thisDay}</div>
+                            {dayEntries.map((entry, idx) => (
+                              <div key={entry.id} style={{ marginBottom: 6, padding: '4px 6px', background: idx % 2 === 0 ? '#e3f2fd' : '#e8f5e9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
                                 <div style={{ 
-                                  background: '#1976d2', 
+                                  background: idx % 2 === 0 ? '#1976d2' : '#4caf50', 
                                   color: '#fff', 
-                                  padding: '6px 8px', 
+                                  padding: '4px 6px', 
                                   borderRadius: 4, 
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: 600,
-                                  marginBottom: 6
+                                  marginBottom: 4
                                 }}>
-                                  ✓ {scheduleEntry.hours}h {scheduleEntry.minutes > 0 ? `${scheduleEntry.minutes}m` : ''}
+                                  ✓ {entry.hours}h {entry.minutes > 0 ? `${entry.minutes}m` : ''}
                                 </div>
-                                {scheduleEntry.physician_name && (
+                                {entry.physician_name && (
                                   <div style={{ fontSize: 11, color: '#1565c0', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
-                                    🩺 {scheduleEntry.physician_name}
+                                    🩺 {entry.physician_name}
                                   </div>
                                 )}
-                                {scheduleEntry.health_center_name && (
+                                {entry.health_center_name && (
                                   <div style={{ fontSize: 11, color: '#388e3c', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
-                                    🏥 {scheduleEntry.health_center_name}
+                                    🏥 {entry.health_center_name}
                                   </div>
                                 )}
-                                {scheduleEntry.notes && (
-                                  <div style={{ fontSize: 11, color: '#666', marginBottom: 6, wordBreak: 'break-word' }}>
-                                    {scheduleEntry.notes}
+                                {entry.notes && (
+                                  <div style={{ fontSize: 10, color: '#666', marginBottom: 4, wordBreak: 'break-word' }}>
+                                    {entry.notes}
                                   </div>
                                 )}
                                 {!exportingPDF && (
                                   <div style={{ display: 'flex', gap: 4 }}>
                                     <button
-                                      onClick={() => openEditModal(dateKey, thisDay, scheduleEntry)}
+                                      onClick={() => openEditModal(dateKey, thisDay, entry)}
                                       style={{
                                         flex: 1,
-                                        padding: '4px',
-                                        fontSize: 11,
+                                        padding: '3px',
+                                        fontSize: 10,
                                         background: '#667eea',
                                         color: '#fff',
                                         border: 'none',
@@ -309,11 +326,11 @@ const MySchedulePage: React.FC = () => {
                                       Edit
                                     </button>
                                     <button
-                                      onClick={() => handleDelete(scheduleEntry.id)}
+                                      onClick={() => handleDelete(entry.id)}
                                       style={{
                                         flex: 1,
-                                        padding: '4px',
-                                        fontSize: 11,
+                                        padding: '3px',
+                                        fontSize: 10,
                                         background: '#e74c3c',
                                         color: '#fff',
                                         border: 'none',
@@ -326,25 +343,25 @@ const MySchedulePage: React.FC = () => {
                                   </div>
                                 )}
                               </div>
-                            ) : (
-                              !exportingPDF && (
-                                <button
-                                  onClick={() => openEditModal(dateKey, thisDay)}
-                                  style={{
-                                    width: '100%',
-                                    padding: '6px',
-                                    fontSize: 12,
-                                    background: '#43cea2',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: 4,
-                                    cursor: 'pointer',
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  + Add
-                                </button>
-                              )
+                            ))}
+                            {!exportingPDF && (
+                              <button
+                                onClick={() => openEditModal(dateKey, thisDay)}
+                                style={{
+                                  width: '100%',
+                                  padding: '4px',
+                                  fontSize: 11,
+                                  background: '#43cea2',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: 4,
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  marginTop: dayEntries.length > 0 ? 4 : 0
+                                }}
+                              >
+                                + Add
+                              </button>
                             )}
                           </td>
                         );
