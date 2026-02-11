@@ -53,6 +53,8 @@ async function migrateDatabase() {
         schedule_date DATE NOT NULL,
         hours INTEGER DEFAULT 0,
         minutes INTEGER DEFAULT 0,
+        start_time VARCHAR(10),
+        end_time VARCHAR(10),
         notes TEXT,
         physician_name VARCHAR(255),
         health_center_name VARCHAR(255),
@@ -66,11 +68,13 @@ async function migrateDatabase() {
       ALTER TABLE personal_schedules DROP CONSTRAINT IF EXISTS personal_schedules_user_id_schedule_date_key;
     `);
 
-    // Add physician_name and health_center_name columns if they don't exist
+    // Add physician_name, health_center_name, start_time, end_time columns if they don't exist
     await pool.query(`
       ALTER TABLE personal_schedules
       ADD COLUMN IF NOT EXISTS physician_name VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS health_center_name VARCHAR(255);
+      ADD COLUMN IF NOT EXISTS health_center_name VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS start_time VARCHAR(10),
+      ADD COLUMN IF NOT EXISTS end_time VARCHAR(10);
     `);
     
     // Add contact_person, fax and email columns to health_centers if they don't exist
@@ -822,13 +826,13 @@ app.get('/api/personal-schedules', async (req, res) => {
 });
 
 app.post('/api/personal-schedules', async (req, res) => {
-  const { userId, scheduleDate, hours, minutes, notes, physicianName, healthCenterName } = req.body;
+  const { userId, scheduleDate, hours, minutes, notes, physicianName, healthCenterName, startTime, endTime } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO personal_schedules (user_id, schedule_date, hours, minutes, notes, physician_name, health_center_name) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+      `INSERT INTO personal_schedules (user_id, schedule_date, hours, minutes, notes, physician_name, health_center_name, start_time, end_time) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
-      [userId, scheduleDate, hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '']
+      [userId, scheduleDate, hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '']
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -837,11 +841,11 @@ app.post('/api/personal-schedules', async (req, res) => {
 });
 
 app.put('/api/personal-schedules/:id', async (req, res) => {
-  const { hours, minutes, notes, physicianName, healthCenterName } = req.body;
+  const { hours, minutes, notes, physicianName, healthCenterName, startTime, endTime } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE personal_schedules SET hours=$1, minutes=$2, notes=$3, physician_name=$4, health_center_name=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *',
-      [hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', req.params.id]
+      'UPDATE personal_schedules SET hours=$1, minutes=$2, notes=$3, physician_name=$4, health_center_name=$5, start_time=$6, end_time=$7, lastmodified=CURRENT_TIMESTAMP WHERE id=$8 RETURNING *',
+      [hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '', req.params.id]
     );
     res.json(result.rows[0]);
   } catch (err) {

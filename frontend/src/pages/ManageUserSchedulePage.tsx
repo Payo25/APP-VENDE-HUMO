@@ -22,12 +22,22 @@ const getDateString = (year: number, month: number, day: number) => {
   return `${year}-${mm}-${dd}`;
 };
 
+const formatTime12 = (time24: string) => {
+  if (!time24) return '';
+  const [h, m] = time24.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hr = h % 12 || 12;
+  return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+};
+
 interface ScheduleEntry {
   id: number;
   user_id: number;
   schedule_date: string;
   hours: number;
   minutes: number;
+  start_time: string;
+  end_time: string;
   notes: string;
   physician_name: string;
   health_center_name: string;
@@ -72,6 +82,8 @@ const ManageUserSchedulePage: React.FC = () => {
   const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
   const [tempPhysician, setTempPhysician] = useState('');
   const [tempHealthCenter, setTempHealthCenter] = useState('');
+  const [tempStartTime, setTempStartTime] = useState('07:00');
+  const [tempEndTime, setTempEndTime] = useState('15:00');
 
   useEffect(() => {
     if (userRole !== 'Scheduler' && userRole !== 'Business Assistant') {
@@ -138,7 +150,9 @@ const ManageUserSchedulePage: React.FC = () => {
             minutes: tempMinutes,
             notes: tempNotes,
             physicianName: tempPhysician,
-            healthCenterName: tempHealthCenter
+            healthCenterName: tempHealthCenter,
+            startTime: tempStartTime,
+            endTime: tempEndTime
           })
         });
       } else {
@@ -153,7 +167,9 @@ const ManageUserSchedulePage: React.FC = () => {
             minutes: tempMinutes,
             notes: tempNotes,
             physicianName: tempPhysician,
-            healthCenterName: tempHealthCenter
+            healthCenterName: tempHealthCenter,
+            startTime: tempStartTime,
+            endTime: tempEndTime
           })
         });
       }
@@ -193,6 +209,8 @@ const ManageUserSchedulePage: React.FC = () => {
     setTempNotes(entry?.notes || '');
     setTempPhysician(entry?.physician_name || '');
     setTempHealthCenter(entry?.health_center_name || '');
+    setTempStartTime(entry?.start_time || '07:00');
+    setTempEndTime(entry?.end_time || '15:00');
   };
 
   const daysInMonth = getDaysInMonth(month, year);
@@ -305,17 +323,31 @@ const ManageUserSchedulePage: React.FC = () => {
                               <div style={{ fontWeight: 600, marginBottom: 8, color: dayEntries.length > 0 ? '#f57c00' : 'inherit' }}>{thisDay}</div>
                               {dayEntries.map((entry, idx) => (
                                 <div key={entry.id} style={{ marginBottom: 6, padding: '4px 6px', background: idx % 2 === 0 ? '#fff8e1' : '#e8f5e9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-                                  <div style={{ 
-                                    background: idx % 2 === 0 ? '#ff9800' : '#4caf50', 
-                                    color: '#fff', 
-                                    padding: '4px 6px', 
-                                    borderRadius: 4, 
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    marginBottom: 4
-                                  }}>
-                                    ✓ {entry.hours}h {entry.minutes > 0 ? `${entry.minutes}m` : ''}
-                                  </div>
+                                  {entry.start_time && entry.end_time ? (
+                                    <div style={{ 
+                                      background: idx % 2 === 0 ? '#ff9800' : '#4caf50', 
+                                      color: '#fff', 
+                                      padding: '4px 6px', 
+                                      borderRadius: 4, 
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      marginBottom: 4
+                                    }}>
+                                      🕐 {formatTime12(entry.start_time)} - {formatTime12(entry.end_time)}
+                                    </div>
+                                  ) : (
+                                    <div style={{ 
+                                      background: idx % 2 === 0 ? '#ff9800' : '#4caf50', 
+                                      color: '#fff', 
+                                      padding: '4px 6px', 
+                                      borderRadius: 4, 
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                      marginBottom: 4
+                                    }}>
+                                      ✓ {entry.hours}h {entry.minutes > 0 ? `${entry.minutes}m` : ''}
+                                    </div>
+                                  )}
                                   {entry.physician_name && (
                                     <div style={{ fontSize: 11, color: '#1976d2', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
                                       🩺 {entry.physician_name}
@@ -470,13 +502,11 @@ const ManageUserSchedulePage: React.FC = () => {
               </div>
               
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Hours:</label>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>🕐 Start Time:</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="24"
-                  value={tempHours}
-                  onChange={(e) => setTempHours(Math.min(24, Math.max(0, Number(e.target.value))))}
+                  type="time"
+                  value={tempStartTime}
+                  onChange={(e) => setTempStartTime(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
@@ -488,13 +518,11 @@ const ManageUserSchedulePage: React.FC = () => {
               </div>
               
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Minutes:</label>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>🕐 End Time:</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={tempMinutes}
-                  onChange={(e) => setTempMinutes(Math.min(59, Math.max(0, Number(e.target.value))))}
+                  type="time"
+                  value={tempEndTime}
+                  onChange={(e) => setTempEndTime(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
@@ -529,7 +557,7 @@ const ManageUserSchedulePage: React.FC = () => {
                 marginBottom: 24
               }}>
                 <span style={{ fontSize: 14, color: '#6b7280' }}>
-                  Total: <strong style={{ color: '#1f2937', fontSize: 16 }}>{tempHours}h {tempMinutes}m</strong>
+                  Schedule: <strong style={{ color: '#1f2937', fontSize: 16 }}>{formatTime12(tempStartTime)} - {formatTime12(tempEndTime)}</strong>
                 </span>
               </div>
               

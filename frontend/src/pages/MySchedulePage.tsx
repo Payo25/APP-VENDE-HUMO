@@ -21,12 +21,22 @@ const getDateString = (year: number, month: number, day: number) => {
   return `${year}-${mm}-${dd}`;
 };
 
+const formatTime12 = (time24: string) => {
+  if (!time24) return '';
+  const [h, m] = time24.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hr = h % 12 || 12;
+  return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+};
+
 interface ScheduleEntry {
   id: number;
   user_id: number;
   schedule_date: string;
   hours: number;
   minutes: number;
+  start_time: string;
+  end_time: string;
   notes: string;
   physician_name: string;
   health_center_name: string;
@@ -41,12 +51,6 @@ const MySchedulePage: React.FC = () => {
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
-  const [editModal, setEditModal] = useState<{ date: string, day: number, entry?: ScheduleEntry } | null>(null);
-  const [tempHours, setTempHours] = useState(8);
-  const [tempMinutes, setTempMinutes] = useState(0);
-  const [tempNotes, setTempNotes] = useState('');
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   // Redirect if not RSA
@@ -71,81 +75,6 @@ const MySchedulePage: React.FC = () => {
       });
   }, [month, year, userId]);
 
-  const handleAddOrEdit = async () => {
-    if (!editModal) return;
-    
-    setError('');
-    setSuccess('');
-    
-    try {
-      let res;
-      if (editModal.entry) {
-        // Edit existing entry via PUT
-        res = await fetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hours: tempHours,
-            minutes: tempMinutes,
-            notes: tempNotes
-          })
-        });
-      } else {
-        // Add new entry via POST
-        res = await fetch(PERSONAL_SCHEDULES_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            scheduleDate: editModal.date,
-            hours: tempHours,
-            minutes: tempMinutes,
-            notes: tempNotes
-          })
-        });
-      }
-      
-      if (res.ok) {
-        setSuccess(editModal.entry ? 'Schedule updated!' : 'Schedule added!');
-        setEditModal(null);
-        // Refresh schedules
-        const refreshRes = await fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`);
-        const data = await refreshRes.json();
-        setSchedules(data);
-      } else {
-        setError('Failed to save schedule');
-      }
-    } catch (err) {
-      setError('Network error');
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Remove this schedule entry?')) return;
-    
-    try {
-      const res = await fetch(`${PERSONAL_SCHEDULES_URL}/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setSuccess('Schedule removed!');
-        // Refresh schedules
-        const refreshRes = await fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`);
-        const data = await refreshRes.json();
-        setSchedules(data);
-      } else {
-        setError('Failed to delete schedule');
-      }
-    } catch (err) {
-      setError('Network error');
-    }
-  };
-
-  const openEditModal = (date: string, day: number, entry?: ScheduleEntry) => {
-    setEditModal({ date, day, entry });
-    setTempHours(entry?.hours || 8);
-    setTempMinutes(entry?.minutes || 0);
-    setTempNotes(entry?.notes || '');
-  };
-
   const handleDownloadPDF = async () => {
     setExportingPDF(true);
     await new Promise(r => setTimeout(r, 50));
@@ -167,7 +96,7 @@ const MySchedulePage: React.FC = () => {
 
   const daysInMonth = getDaysInMonth(month, year);
 
-  // Create a map of schedules by date for easy lookup (multiple entries per day)
+  // Create a map of schedules by date (multiple entries per day)
   const schedulesByDate = schedules.reduce((acc, schedule) => {
     const key = schedule.schedule_date;
     if (!acc[key]) acc[key] = [];
@@ -244,8 +173,6 @@ const MySchedulePage: React.FC = () => {
             </label>
           </div>
         )}
-        {success && <div style={{ color: '#43cea2', marginTop: 12 }}>{success}</div>}
-        {error && <div style={{ color: '#e74c3c', marginTop: 12 }}>{error}</div>}
         <div id="my-schedule-calendar">
           {loading ? <p>Loading...</p> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16, tableLayout: 'fixed' }}>
@@ -258,11 +185,11 @@ const MySchedulePage: React.FC = () => {
               </thead>
               <tbody>
                 {(() => {
-                  const rows = [];
+                  const rows: React.JSX.Element[] = [];
                   const firstDay = new Date(year, month - 1, 1).getDay();
                   let day = 1;
                   for (let week = 0; week < 6 && day <= daysInMonth; week++) {
-                    const cells = [];
+                    const cells: React.JSX.Element[] = [];
                     for (let d = 0; d < 7; d++) {
                       if ((week === 0 && d < firstDay) || day > daysInMonth) {
                         cells.push(<td key={d} style={{ padding: 8, minHeight: 120, background: '#f6f8fa' }} />);
@@ -273,26 +200,48 @@ const MySchedulePage: React.FC = () => {
                         
                         cells.push(
                           <td key={d} style={{ 
-                            padding: 8, 
+                            padding: 6, 
                             minHeight: 120, 
                             border: '1px solid #e2e8f0', 
                             verticalAlign: 'top',
                             background: dayEntries.length > 0 ? '#e3f2fd' : 'transparent'
                           }}>
-                            <div style={{ fontWeight: 600, marginBottom: 8, color: dayEntries.length > 0 ? '#1565c0' : 'inherit' }}>{thisDay}</div>
+                            <div style={{ fontWeight: 600, marginBottom: 6, color: dayEntries.length > 0 ? '#1565c0' : 'inherit', fontSize: 13 }}>{thisDay}</div>
                             {dayEntries.map((entry, idx) => (
-                              <div key={entry.id} style={{ marginBottom: 6, padding: '4px 6px', background: idx % 2 === 0 ? '#e3f2fd' : '#e8f5e9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-                                <div style={{ 
-                                  background: idx % 2 === 0 ? '#1976d2' : '#4caf50', 
-                                  color: '#fff', 
-                                  padding: '4px 6px', 
-                                  borderRadius: 4, 
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  marginBottom: 4
-                                }}>
-                                  ✓ {entry.hours}h {entry.minutes > 0 ? `${entry.minutes}m` : ''}
-                                </div>
+                              <div key={entry.id} style={{ 
+                                marginBottom: 5, 
+                                padding: '5px 6px', 
+                                background: idx % 2 === 0 ? '#e3f2fd' : '#e8f5e9', 
+                                borderRadius: 6, 
+                                border: '1px solid #e0e0e0' 
+                              }}>
+                                {entry.start_time && entry.end_time ? (
+                                  <div style={{ 
+                                    background: idx % 2 === 0 ? '#1976d2' : '#4caf50', 
+                                    color: '#fff', 
+                                    padding: '4px 6px', 
+                                    borderRadius: 4, 
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    marginBottom: 4,
+                                    textAlign: 'center'
+                                  }}>
+                                    🕐 {formatTime12(entry.start_time)} - {formatTime12(entry.end_time)}
+                                  </div>
+                                ) : entry.hours > 0 || entry.minutes > 0 ? (
+                                  <div style={{ 
+                                    background: idx % 2 === 0 ? '#1976d2' : '#4caf50', 
+                                    color: '#fff', 
+                                    padding: '4px 6px', 
+                                    borderRadius: 4, 
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    marginBottom: 4,
+                                    textAlign: 'center'
+                                  }}>
+                                    ✓ {entry.hours}h {entry.minutes > 0 ? `${entry.minutes}m` : ''}
+                                  </div>
+                                ) : null}
                                 {entry.physician_name && (
                                   <div style={{ fontSize: 11, color: '#1565c0', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
                                     🩺 {entry.physician_name}
@@ -304,65 +253,12 @@ const MySchedulePage: React.FC = () => {
                                   </div>
                                 )}
                                 {entry.notes && (
-                                  <div style={{ fontSize: 10, color: '#666', marginBottom: 4, wordBreak: 'break-word' }}>
+                                  <div style={{ fontSize: 10, color: '#666', wordBreak: 'break-word' }}>
                                     {entry.notes}
-                                  </div>
-                                )}
-                                {!exportingPDF && (
-                                  <div style={{ display: 'flex', gap: 4 }}>
-                                    <button
-                                      onClick={() => openEditModal(dateKey, thisDay, entry)}
-                                      style={{
-                                        flex: 1,
-                                        padding: '3px',
-                                        fontSize: 10,
-                                        background: '#667eea',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(entry.id)}
-                                      style={{
-                                        flex: 1,
-                                        padding: '3px',
-                                        fontSize: 10,
-                                        background: '#e74c3c',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      Del
-                                    </button>
                                   </div>
                                 )}
                               </div>
                             ))}
-                            {!exportingPDF && (
-                              <button
-                                onClick={() => openEditModal(dateKey, thisDay)}
-                                style={{
-                                  width: '100%',
-                                  padding: '4px',
-                                  fontSize: 11,
-                                  background: '#43cea2',
-                                  color: '#fff',
-                                  border: 'none',
-                                  borderRadius: 4,
-                                  cursor: 'pointer',
-                                  fontWeight: 600,
-                                  marginTop: dayEntries.length > 0 ? 4 : 0
-                                }}
-                              >
-                                + Add
-                              </button>
-                            )}
                           </td>
                         );
                         day++;
@@ -386,153 +282,7 @@ const MySchedulePage: React.FC = () => {
             borderRadius: 8,
             marginTop: 16
           }}>
-            No schedule entries for {monthNames[month-1]} {year}. Click "+ Add" on any day to create an entry.
-          </div>
-        )}
-        
-        {/* Edit/Add Modal */}
-        {editModal && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              background: 'rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000
-            }}
-            onClick={() => setEditModal(null)}
-          >
-            <div
-              style={{
-                background: '#fff',
-                borderRadius: 12,
-                padding: 32,
-                maxWidth: 500,
-                width: '90%',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 style={{ marginTop: 0, marginBottom: 24, color: '#1f2937' }}>
-                {editModal.entry ? '✏️ Edit' : '➕ Add'} Schedule - Day {editModal.day}
-              </h3>
-              
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Hours:
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="24"
-                  value={tempHours}
-                  onChange={(e) => setTempHours(Math.min(24, Math.max(0, Number(e.target.value))))}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: 16,
-                    border: '2px solid #e5e7eb',
-                    borderRadius: 6,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Minutes:
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={tempMinutes}
-                  onChange={(e) => setTempMinutes(Math.min(59, Math.max(0, Number(e.target.value))))}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: 16,
-                    border: '2px solid #e5e7eb',
-                    borderRadius: 6,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Notes (optional):
-                </label>
-                <textarea
-                  value={tempNotes}
-                  onChange={(e) => setTempNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Add any notes about this schedule..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: 16,
-                    border: '2px solid #e5e7eb',
-                    borderRadius: 6,
-                    outline: 'none',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-              
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                padding: '12px 16px', 
-                background: '#f3f4f6', 
-                borderRadius: 6,
-                marginBottom: 24
-              }}>
-                <span style={{ fontSize: 14, color: '#6b7280' }}>
-                  Total: <strong style={{ color: '#1f2937', fontSize: 16 }}>{tempHours}h {tempMinutes}m</strong>
-                </span>
-              </div>
-              
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button
-                  onClick={handleAddOrEdit}
-                  style={{
-                    flex: 1,
-                    padding: '12px 24px',
-                    borderRadius: 6,
-                    background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    fontWeight: 600,
-                    fontSize: 16,
-                    cursor: 'pointer'
-                  }}
-                >
-                  💾 Save
-                </button>
-                <button
-                  onClick={() => setEditModal(null)}
-                  style={{
-                    flex: 1,
-                    padding: '12px 24px',
-                    borderRadius: 6,
-                    background: '#e5e7eb',
-                    color: '#374151',
-                    border: 'none',
-                    fontWeight: 600,
-                    fontSize: 16,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            No schedule entries for {monthNames[month-1]} {year}. Your scheduler will assign your schedule.
           </div>
         )}
       </div>
