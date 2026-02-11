@@ -820,6 +820,92 @@ app.delete('/api/physicians/:id', async (req, res) => {
   }
 });
 
+// Helper function to send schedule email notification to RSA
+async function sendScheduleEmailToRSA(userId, action, details) {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.log('Schedule email skipped (SendGrid not configured)');
+    return;
+  }
+  try {
+    // Look up the user's full name
+    const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [userId]);
+    if (userResult.rows.length === 0) return;
+    const rsaFullName = userResult.rows[0].fullname;
+
+    // Look up email from rsa_emails table (case-insensitive match)
+    const emailResult = await pool.query(
+      'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)',
+      [rsaFullName]
+    );
+    if (emailResult.rows.length === 0) {
+      console.log(`No RSA email found for "${rsaFullName}", schedule notification skipped`);
+      return;
+    }
+    const rsaEmail = emailResult.rows[0].email;
+
+    // Format schedule details for the email
+    const scheduleDate = details.schedule_date || details.scheduleDate || 'N/A';
+    const startTime = details.start_time || details.startTime || '';
+    const endTime = details.end_time || details.endTime || '';
+    const physician = details.physician_name || details.physicianName || '';
+    const healthCenter = details.health_center_name || details.healthCenterName || '';
+    const notes = details.notes || '';
+    const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : 'N/A';
+
+    let subject, html;
+    if (action === 'CREATED') {
+      subject = `New Schedule Entry - ${scheduleDate}`;
+      html = `<h2>New Schedule Entry</h2>
+        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>A new schedule entry has been added for you:</p>
+        <table style="border-collapse:collapse;width:100%;max-width:500px">
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${timeRange}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Physician</td><td style="padding:8px;border:1px solid #ddd">${physician || 'N/A'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Health Center</td><td style="padding:8px;border:1px solid #ddd">${healthCenter || 'N/A'}</td></tr>
+          ${notes ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Notes</td><td style="padding:8px;border:1px solid #ddd">${notes}</td></tr>` : ''}
+        </table>
+        <p style="margin-top:16px;color:#666">Please check your schedule for details.</p>`;
+    } else if (action === 'UPDATED') {
+      subject = `Schedule Updated - ${scheduleDate}`;
+      html = `<h2>Schedule Entry Updated</h2>
+        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>Your schedule entry has been updated:</p>
+        <table style="border-collapse:collapse;width:100%;max-width:500px">
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${timeRange}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Physician</td><td style="padding:8px;border:1px solid #ddd">${physician || 'N/A'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Health Center</td><td style="padding:8px;border:1px solid #ddd">${healthCenter || 'N/A'}</td></tr>
+          ${notes ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Notes</td><td style="padding:8px;border:1px solid #ddd">${notes}</td></tr>` : ''}
+        </table>
+        <p style="margin-top:16px;color:#666">Please review your updated schedule.</p>`;
+    } else if (action === 'DELETED') {
+      subject = `Schedule Entry Removed - ${scheduleDate}`;
+      html = `<h2>Schedule Entry Removed</h2>
+        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>A schedule entry has been removed from your schedule:</p>
+        <table style="border-collapse:collapse;width:100%;max-width:500px">
+          <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
+          ${startTime ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${timeRange}</td></tr>` : ''}
+          ${physician ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Physician</td><td style="padding:8px;border:1px solid #ddd">${physician}</td></tr>` : ''}
+          ${healthCenter ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Health Center</td><td style="padding:8px;border:1px solid #ddd">${healthCenter}</td></tr>` : ''}
+        </table>
+        <p style="margin-top:16px;color:#666">Please check your schedule for any changes.</p>`;
+    }
+
+    const msg = {
+      to: rsaEmail,
+      from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+      subject: subject,
+      html: html,
+    };
+    await sgMail.send(msg);
+    console.log(`✅ Schedule email sent to ${rsaEmail} (${rsaFullName}) - ${action}`);
+  } catch (error) {
+    console.error('❌ Schedule email notification failed:', error.message);
+  }
+}
+
 // ========== PERSONAL SCHEDULES ENDPOINTS ==========
 app.get('/api/personal-schedules', async (req, res) => {
   const { userId, month, year } = req.query;
@@ -848,6 +934,11 @@ app.post('/api/personal-schedules', async (req, res) => {
       [userId, scheduleDate, hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '']
     );
     res.json(result.rows[0]);
+
+    // Send email notification to RSA (async, don't block response)
+    sendScheduleEmailToRSA(userId, 'CREATED', {
+      scheduleDate, startTime, endTime, physicianName, healthCenterName, notes
+    });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
   }
@@ -860,7 +951,13 @@ app.put('/api/personal-schedules/:id', async (req, res) => {
       'UPDATE personal_schedules SET hours=$1, minutes=$2, notes=$3, physician_name=$4, health_center_name=$5, start_time=$6, end_time=$7, lastmodified=CURRENT_TIMESTAMP WHERE id=$8 RETURNING *',
       [hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '', req.params.id]
     );
-    res.json(result.rows[0]);
+    const updated = result.rows[0];
+    res.json(updated);
+
+    // Send email notification to RSA (async, don't block response)
+    if (updated) {
+      sendScheduleEmailToRSA(updated.user_id, 'UPDATED', updated);
+    }
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
   }
@@ -868,8 +965,15 @@ app.put('/api/personal-schedules/:id', async (req, res) => {
 
 app.delete('/api/personal-schedules/:id', async (req, res) => {
   try {
+    // Fetch schedule details before deleting (for email notification)
+    const existing = await pool.query('SELECT * FROM personal_schedules WHERE id=$1', [req.params.id]);
     await pool.query('DELETE FROM personal_schedules WHERE id=$1', [req.params.id]);
     res.json({ success: true });
+
+    // Send email notification to RSA (async, don't block response)
+    if (existing.rows.length > 0) {
+      sendScheduleEmailToRSA(existing.rows[0].user_id, 'DELETED', existing.rows[0]);
+    }
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
   }
