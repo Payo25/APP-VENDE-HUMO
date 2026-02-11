@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = '/api';
@@ -67,15 +67,7 @@ const ManageUserSchedulePage: React.FC = () => {
       });
   }, [userRole, navigate]);
 
-  useEffect(() => {
-    if (selectedUserId) {
-      const user = users.find(u => u.id === selectedUserId);
-      setSelectedUser(user || null);
-      fetchSchedules();
-    }
-  }, [selectedUserId, month, year]);
-
-  const fetchSchedules = () => {
+  const fetchSchedules = useCallback(() => {
     if (!selectedUserId) return;
     setLoading(true);
     fetch(`${PERSONAL_SCHEDULES_URL}?userId=${selectedUserId}&month=${month}&year=${year}`)
@@ -88,7 +80,15 @@ const ManageUserSchedulePage: React.FC = () => {
         setSchedules([]);
         setLoading(false);
       });
-  };
+  }, [selectedUserId, month, year]);
+
+  useEffect(() => {
+    if (selectedUserId) {
+      const user = users.find(u => u.id === selectedUserId);
+      setSelectedUser(user || null);
+      fetchSchedules();
+    }
+  }, [selectedUserId, month, year, users, fetchSchedules]);
 
   const handleAddOrEdit = async () => {
     if (!editModal || !selectedUserId) return;
