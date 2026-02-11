@@ -28,6 +28,8 @@ interface ScheduleEntry {
   hours: number;
   minutes: number;
   notes: string;
+  physician_name: string;
+  health_center_name: string;
 }
 
 const MySchedulePage: React.FC = () => {
@@ -274,6 +276,16 @@ const MySchedulePage: React.FC = () => {
                                 }}>
                                   ✓ {scheduleEntry.hours}h {scheduleEntry.minutes > 0 ? `${scheduleEntry.minutes}m` : ''}
                                 </div>
+                                {scheduleEntry.physician_name && (
+                                  <div style={{ fontSize: 11, color: '#1565c0', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
+                                    🩺 {scheduleEntry.physician_name}
+                                  </div>
+                                )}
+                                {scheduleEntry.health_center_name && (
+                                  <div style={{ fontSize: 11, color: '#388e3c', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
+                                    🏥 {scheduleEntry.health_center_name}
+                                  </div>
+                                )}
                                 {scheduleEntry.notes && (
                                   <div style={{ fontSize: 11, color: '#666', marginBottom: 6, wordBreak: 'break-word' }}>
                                     {scheduleEntry.notes}
