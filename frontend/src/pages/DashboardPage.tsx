@@ -221,6 +221,27 @@ const DashboardPage: React.FC = () => {
             📅 My Schedule
           </button>
         )}
+        {localStorage.getItem('role') === 'Scheduler' && (
+          <button
+            onClick={() => navigate('/call-hours')}
+            style={{
+              width: '100%',
+              padding: '12px 0',
+              background: 'linear-gradient(90deg, #ff9800 0%, #f57c00 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(255,152,0,0.08)',
+              transition: 'background 0.2s',
+              marginBottom: 12
+            }}
+          >
+            📝 Create Schedule
+          </button>
+        )}
         <button
           onClick={() => navigate('/call-hours')}
           style={{
