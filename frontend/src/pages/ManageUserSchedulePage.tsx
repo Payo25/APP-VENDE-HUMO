@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 const API_BASE_URL = '/api';
 const PERSONAL_SCHEDULES_URL = `${API_BASE_URL}/personal-schedules`;
 const USERS_URL = `${API_BASE_URL}/users`;
+const PHYSICIANS_URL = `${API_BASE_URL}/physicians`;
+const HEALTH_CENTERS_URL = `${API_BASE_URL}/health-centers`;
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -27,6 +29,8 @@ interface ScheduleEntry {
   hours: number;
   minutes: number;
   notes: string;
+  physician_name: string;
+  health_center_name: string;
 }
 
 interface User {
@@ -34,6 +38,18 @@ interface User {
   username: string;
   fullName: string;
   role: string;
+}
+
+interface Physician {
+  id: number;
+  name: string;
+  specialty: string;
+}
+
+interface HealthCenter {
+  id: number;
+  name: string;
+  address: string;
 }
 
 const ManageUserSchedulePage: React.FC = () => {
@@ -52,6 +68,10 @@ const ManageUserSchedulePage: React.FC = () => {
   const [tempNotes, setTempNotes] = useState('');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [physicians, setPhysicians] = useState<Physician[]>([]);
+  const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
+  const [tempPhysician, setTempPhysician] = useState('');
+  const [tempHealthCenter, setTempHealthCenter] = useState('');
 
   useEffect(() => {
     if (userRole !== 'Scheduler' && userRole !== 'Business Assistant') {
@@ -65,6 +85,16 @@ const ManageUserSchedulePage: React.FC = () => {
         const rsas = data.filter((u: User) => u.role === 'Registered Surgical Assistant');
         setUsers(rsas);
       });
+    // Fetch physicians
+    fetch(PHYSICIANS_URL)
+      .then(res => res.json())
+      .then(data => setPhysicians(data))
+      .catch(() => {});
+    // Fetch health centers
+    fetch(HEALTH_CENTERS_URL)
+      .then(res => res.json())
+      .then(data => setHealthCenters(data))
+      .catch(() => {});
   }, [userRole, navigate]);
 
   const fetchSchedules = useCallback(() => {
@@ -105,7 +135,9 @@ const ManageUserSchedulePage: React.FC = () => {
           scheduleDate: editModal.date,
           hours: tempHours,
           minutes: tempMinutes,
-          notes: tempNotes
+          notes: tempNotes,
+          physicianName: tempPhysician,
+          healthCenterName: tempHealthCenter
         })
       });
       
@@ -142,6 +174,8 @@ const ManageUserSchedulePage: React.FC = () => {
     setTempHours(entry?.hours || 8);
     setTempMinutes(entry?.minutes || 0);
     setTempNotes(entry?.notes || '');
+    setTempPhysician(entry?.physician_name || '');
+    setTempHealthCenter(entry?.health_center_name || '');
   };
 
   const daysInMonth = getDaysInMonth(month, year);
@@ -263,6 +297,16 @@ const ManageUserSchedulePage: React.FC = () => {
                                   }}>
                                     ✓ {scheduleEntry.hours}h {scheduleEntry.minutes > 0 ? `${scheduleEntry.minutes}m` : ''}
                                   </div>
+                                  {scheduleEntry.physician_name && (
+                                    <div style={{ fontSize: 11, color: '#1976d2', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
+                                      🩺 {scheduleEntry.physician_name}
+                                    </div>
+                                  )}
+                                  {scheduleEntry.health_center_name && (
+                                    <div style={{ fontSize: 11, color: '#388e3c', marginBottom: 2, wordBreak: 'break-word', fontWeight: 600 }}>
+                                      🏥 {scheduleEntry.health_center_name}
+                                    </div>
+                                  )}
                                   {scheduleEntry.notes && (
                                     <div style={{ fontSize: 11, color: '#666', marginBottom: 6, wordBreak: 'break-word' }}>
                                       {scheduleEntry.notes}
@@ -365,6 +409,46 @@ const ManageUserSchedulePage: React.FC = () => {
               <h3 style={{ marginTop: 0, marginBottom: 24 }}>
                 {editModal.entry ? '✏️ Edit' : '➕ Add'} Schedule - Day {editModal.day}
               </h3>
+              
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>🩺 Physician:</label>
+                <select
+                  value={tempPhysician}
+                  onChange={(e) => setTempPhysician(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: 16,
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6
+                  }}
+                >
+                  <option value="">-- Select Physician --</option>
+                  {physicians.map(p => (
+                    <option key={p.id} value={p.name}>{p.name} ({p.specialty})</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>🏥 Health Center:</label>
+                <select
+                  value={tempHealthCenter}
+                  onChange={(e) => setTempHealthCenter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: 16,
+                    border: '2px solid #e5e7eb',
+                    borderRadius: 6
+                  }}
+                >
+                  <option value="">-- Select Health Center --</option>
+                  {healthCenters.map(hc => (
+                    <option key={hc.id} value={hc.name}>{hc.name}</option>
+                  ))}
+                </select>
+              </div>
               
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Hours:</label>
