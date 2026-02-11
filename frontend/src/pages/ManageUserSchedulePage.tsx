@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const API_BASE_URL = '/api';
 const PERSONAL_SCHEDULES_URL = `${API_BASE_URL}/personal-schedules`;
+const USERS_URL = `${API_BASE_URL}/users`;
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -30,34 +29,56 @@ interface ScheduleEntry {
   notes: string;
 }
 
-const MySchedulePage: React.FC = () => {
+interface User {
+  id: number;
+  username: string;
+  fullName: string;
+  role: string;
+}
+
+const ManageUserSchedulePage: React.FC = () => {
+  const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
-  const userId = localStorage.getItem('userId');
-  const userFullName = localStorage.getItem('fullName');
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exportingPDF, setExportingPDF] = useState(false);
   const [editModal, setEditModal] = useState<{ date: string, day: number, entry?: ScheduleEntry } | null>(null);
   const [tempHours, setTempHours] = useState(8);
   const [tempMinutes, setTempMinutes] = useState(0);
   const [tempNotes, setTempNotes] = useState('');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
-  // Redirect if not RSA
   useEffect(() => {
-    if (userRole !== 'Registered Surgical Assistant') {
+    if (userRole !== 'Scheduler' && userRole !== 'Business Assistant') {
       navigate('/dashboard');
+      return;
     }
+    // Fetch RSAs
+    fetch(USERS_URL)
+      .then(res => res.json())
+      .then(data => {
+        const rsas = data.filter((u: User) => u.role === 'Registered Surgical Assistant');
+        setUsers(rsas);
+      });
   }, [userRole, navigate]);
 
-  // Fetch personal schedules for the month
   useEffect(() => {
+    if (selectedUserId) {
+      const user = users.find(u => u.id === selectedUserId);
+      setSelectedUser(user || null);
+      fetchSchedules();
+    }
+  }, [selectedUserId, month, year]);
+
+  const fetchSchedules = () => {
+    if (!selectedUserId) return;
     setLoading(true);
-    fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`)
+    fetch(`${PERSONAL_SCHEDULES_URL}?userId=${selectedUserId}&month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
         setSchedules(data);
@@ -67,10 +88,10 @@ const MySchedulePage: React.FC = () => {
         setSchedules([]);
         setLoading(false);
       });
-  }, [month, year, userId]);
+  };
 
   const handleAddOrEdit = async () => {
-    if (!editModal) return;
+    if (!editModal || !selectedUserId) return;
     
     setError('');
     setSuccess('');
@@ -80,7 +101,7 @@ const MySchedulePage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
+          userId: selectedUserId,
           scheduleDate: editModal.date,
           hours: tempHours,
           minutes: tempMinutes,
@@ -91,10 +112,7 @@ const MySchedulePage: React.FC = () => {
       if (res.ok) {
         setSuccess(editModal.entry ? 'Schedule updated!' : 'Schedule added!');
         setEditModal(null);
-        // Refresh schedules
-        const refreshRes = await fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`);
-        const data = await refreshRes.json();
-        setSchedules(data);
+        fetchSchedules();
       } else {
         setError('Failed to save schedule');
       }
@@ -110,10 +128,7 @@ const MySchedulePage: React.FC = () => {
       const res = await fetch(`${PERSONAL_SCHEDULES_URL}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess('Schedule removed!');
-        // Refresh schedules
-        const refreshRes = await fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`);
-        const data = await refreshRes.json();
-        setSchedules(data);
+        fetchSchedules();
       } else {
         setError('Failed to delete schedule');
       }
@@ -129,35 +144,14 @@ const MySchedulePage: React.FC = () => {
     setTempNotes(entry?.notes || '');
   };
 
-  const handleDownloadPDF = async () => {
-    setExportingPDF(true);
-    await new Promise(r => setTimeout(r, 50));
-    const planner = document.getElementById('my-schedule-calendar');
-    if (!planner) { setExportingPDF(false); return; }
-    const canvas = await html2canvas(planner, { scale: 2, backgroundColor: '#fff' });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth - 60;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    pdf.setFontSize(20);
-    pdf.text(`My Schedule - ${monthNames[month-1]} ${year}`, pageWidth / 2, 40, { align: 'center' });
-    pdf.addImage(imgData, 'PNG', 30, 60, imgWidth, Math.min(imgHeight, pageHeight - 80));
-    pdf.save(`my-schedule-${monthNames[month-1]}-${year}.pdf`);
-    setExportingPDF(false);
-  };
-
   const daysInMonth = getDaysInMonth(month, year);
-
-  // Create a map of schedules by date for easy lookup
   const schedulesByDate = schedules.reduce((acc, schedule) => {
     acc[schedule.schedule_date] = schedule;
     return acc;
   }, {} as { [date: string]: ScheduleEntry });
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 0' }}>
       <div className="responsive-card" style={{ maxWidth: 1300, width: '100%' }}>
         <button
           onClick={() => navigate('/dashboard')}
@@ -171,115 +165,109 @@ const MySchedulePage: React.FC = () => {
             fontSize: 16,
             fontWeight: 600,
             cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(90,103,216,0.08)',
-            transition: 'background 0.2s',
             marginBottom: 24
           }}
         >
           ← Back to Dashboard
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ margin: 0 }}>📅 My Schedule</h2>
-          <span style={{ 
-            padding: '6px 12px', 
-            borderRadius: 6, 
-            background: '#e3f2fd', 
-            color: '#1565c0', 
-            fontSize: 14, 
-            fontWeight: 600 
-          }}>
-            {userFullName || 'My Schedule'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginBottom: 8 }}>
-          <button
-            onClick={handleDownloadPDF}
+
+        <h2 style={{ marginBottom: 20 }}>Manage User Schedule</h2>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Select RSA:</label>
+          <select
+            value={selectedUserId || ''}
+            onChange={(e) => setSelectedUserId(Number(e.target.value))}
             style={{
-              padding: '8px 20px',
-              borderRadius: 6,
-              background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 600,
-              fontSize: 15,
-              cursor: 'pointer',
-              marginBottom: 0
+              width: '100%',
+              padding: '10px',
+              fontSize: 16,
+              border: '2px solid #e5e7eb',
+              borderRadius: 6
             }}
-            tabIndex={0}
-            aria-label="Download My Schedule as PDF"
           >
-            Download PDF
-          </button>
+            <option value="">-- Select a user --</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.fullName || user.username}
+              </option>
+            ))}
+          </select>
         </div>
-        {!exportingPDF && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-            <label>Month:
-              <select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ marginLeft: 8 }}>
-                {[...Array(12)].map((_, i) => (
-                  <option key={i + 1} value={i + 1}>{monthNames[i]}</option>
-                ))}
-              </select>
-            </label>
-            <label>Year:
-              <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} style={{ width: 80, marginLeft: 8 }} />
-            </label>
-          </div>
-        )}
-        {success && <div style={{ color: '#43cea2', marginTop: 12 }}>{success}</div>}
-        {error && <div style={{ color: '#e74c3c', marginTop: 12 }}>{error}</div>}
-        <div id="my-schedule-calendar">
-          {loading ? <p>Loading...</p> : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16, tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ background: '#f6f8fa' }}>
-                  {[...Array(7)].map((_, i) => (
-                    <th key={i} style={{ padding: 8, borderBottom: '1px solid #e2e8f0', width: 78 }}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i]}</th>
+
+        {selectedUserId && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>📅 Schedule for {selectedUser?.fullName || selectedUser?.username}</h3>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              <label>Month:
+                <select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ marginLeft: 8 }}>
+                  {[...Array(12)].map((_, i) => (
+                    <option key={i + 1} value={i + 1}>{monthNames[i]}</option>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const rows = [];
-                  const firstDay = new Date(year, month - 1, 1).getDay();
-                  let day = 1;
-                  for (let week = 0; week < 6 && day <= daysInMonth; week++) {
-                    const cells = [];
-                    for (let d = 0; d < 7; d++) {
-                      if ((week === 0 && d < firstDay) || day > daysInMonth) {
-                        cells.push(<td key={d} style={{ padding: 8, minHeight: 120, background: '#f6f8fa' }} />);
-                      } else {
-                        const thisDay = day;
-                        const dateKey = getDateString(year, month, thisDay);
-                        const scheduleEntry = schedulesByDate[dateKey];
-                        
-                        cells.push(
-                          <td key={d} style={{ 
-                            padding: 8, 
-                            minHeight: 120, 
-                            border: '1px solid #e2e8f0', 
-                            verticalAlign: 'top',
-                            background: scheduleEntry ? '#e3f2fd' : 'transparent'
-                          }}>
-                            <div style={{ fontWeight: 600, marginBottom: 8, color: scheduleEntry ? '#1565c0' : 'inherit' }}>{thisDay}</div>
-                            {scheduleEntry ? (
-                              <div>
-                                <div style={{ 
-                                  background: '#1976d2', 
-                                  color: '#fff', 
-                                  padding: '6px 8px', 
-                                  borderRadius: 4, 
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  marginBottom: 6
-                                }}>
-                                  ✓ {scheduleEntry.hours}h {scheduleEntry.minutes > 0 ? `${scheduleEntry.minutes}m` : ''}
-                                </div>
-                                {scheduleEntry.notes && (
-                                  <div style={{ fontSize: 11, color: '#666', marginBottom: 6, wordBreak: 'break-word' }}>
-                                    {scheduleEntry.notes}
+                </select>
+              </label>
+              <label>Year:
+                <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} style={{ width: 80, marginLeft: 8 }} />
+              </label>
+            </div>
+
+            {success && <div style={{ color: '#43cea2', marginBottom: 12 }}>{success}</div>}
+            {error && <div style={{ color: '#e74c3c', marginBottom: 12 }}>{error}</div>}
+
+            {loading ? <p>Loading...</p> : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16, tableLayout: 'fixed' }}>
+                <thead>
+                  <tr style={{ background: '#f6f8fa' }}>
+                    {[...Array(7)].map((_, i) => (
+                      <th key={i} style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i]}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const rows = [];
+                    const firstDay = new Date(year, month - 1, 1).getDay();
+                    let day = 1;
+                    for (let week = 0; week < 6 && day <= daysInMonth; week++) {
+                      const cells = [];
+                      for (let d = 0; d < 7; d++) {
+                        if ((week === 0 && d < firstDay) || day > daysInMonth) {
+                          cells.push(<td key={d} style={{ padding: 8, minHeight: 120, background: '#f6f8fa' }} />);
+                        } else {
+                          const thisDay = day;
+                          const dateKey = getDateString(year, month, thisDay);
+                          const scheduleEntry = schedulesByDate[dateKey];
+                          
+                          cells.push(
+                            <td key={d} style={{ 
+                              padding: 8, 
+                              minHeight: 120, 
+                              border: '1px solid #e2e8f0', 
+                              verticalAlign: 'top',
+                              background: scheduleEntry ? '#fff3e0' : 'transparent'
+                            }}>
+                              <div style={{ fontWeight: 600, marginBottom: 8, color: scheduleEntry ? '#f57c00' : 'inherit' }}>{thisDay}</div>
+                              {scheduleEntry ? (
+                                <div>
+                                  <div style={{ 
+                                    background: '#ff9800', 
+                                    color: '#fff', 
+                                    padding: '6px 8px', 
+                                    borderRadius: 4, 
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    marginBottom: 6
+                                  }}>
+                                    ✓ {scheduleEntry.hours}h {scheduleEntry.minutes > 0 ? `${scheduleEntry.minutes}m` : ''}
                                   </div>
-                                )}
-                                {!exportingPDF && (
+                                  {scheduleEntry.notes && (
+                                    <div style={{ fontSize: 11, color: '#666', marginBottom: 6, wordBreak: 'break-word' }}>
+                                      {scheduleEntry.notes}
+                                    </div>
+                                  )}
                                   <div style={{ display: 'flex', gap: 4 }}>
                                     <button
                                       onClick={() => openEditModal(dateKey, thisDay, scheduleEntry)}
@@ -312,10 +300,8 @@ const MySchedulePage: React.FC = () => {
                                       Del
                                     </button>
                                   </div>
-                                )}
-                              </div>
-                            ) : (
-                              !exportingPDF && (
+                                </div>
+                              ) : (
                                 <button
                                   onClick={() => openEditModal(dateKey, thisDay)}
                                   style={{
@@ -332,35 +318,22 @@ const MySchedulePage: React.FC = () => {
                                 >
                                   + Add
                                 </button>
-                              )
-                            )}
-                          </td>
-                        );
-                        day++;
+                              )}
+                            </td>
+                          );
+                          day++;
+                        }
                       }
+                      rows.push(<tr key={week}>{cells}</tr>);
                     }
-                    rows.push(<tr key={week}>{cells}</tr>);
-                  }
-                  return rows;
-                })()}
-              </tbody>
-            </table>
-          )}
-        </div>
-        {schedules.length === 0 && !loading && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '40px 20px', 
-            color: '#666', 
-            fontSize: 16,
-            background: '#f9fafb',
-            borderRadius: 8,
-            marginTop: 16
-          }}>
-            No schedule entries for {monthNames[month-1]} {year}. Click "+ Add" on any day to create an entry.
-          </div>
+                    return rows;
+                  })()}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
-        
+
         {/* Edit/Add Modal */}
         {editModal && (
           <div
@@ -389,14 +362,12 @@ const MySchedulePage: React.FC = () => {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ marginTop: 0, marginBottom: 24, color: '#1f2937' }}>
+              <h3 style={{ marginTop: 0, marginBottom: 24 }}>
                 {editModal.entry ? '✏️ Edit' : '➕ Add'} Schedule - Day {editModal.day}
               </h3>
               
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Hours:
-                </label>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Hours:</label>
                 <input
                   type="number"
                   min="0"
@@ -408,16 +379,13 @@ const MySchedulePage: React.FC = () => {
                     padding: '10px 12px',
                     fontSize: 16,
                     border: '2px solid #e5e7eb',
-                    borderRadius: 6,
-                    outline: 'none'
+                    borderRadius: 6
                   }}
                 />
               </div>
               
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Minutes:
-                </label>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Minutes:</label>
                 <input
                   type="number"
                   min="0"
@@ -429,36 +397,29 @@ const MySchedulePage: React.FC = () => {
                     padding: '10px 12px',
                     fontSize: 16,
                     border: '2px solid #e5e7eb',
-                    borderRadius: 6,
-                    outline: 'none'
+                    borderRadius: 6
                   }}
                 />
               </div>
               
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, color: '#374151' }}>
-                  Notes (optional):
-                </label>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Notes:</label>
                 <textarea
                   value={tempNotes}
                   onChange={(e) => setTempNotes(e.target.value)}
                   rows={3}
-                  placeholder="Add any notes about this schedule..."
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     fontSize: 16,
                     border: '2px solid #e5e7eb',
                     borderRadius: 6,
-                    outline: 'none',
                     resize: 'vertical'
                   }}
                 />
               </div>
               
               <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
                 padding: '12px 16px', 
                 background: '#f3f4f6', 
                 borderRadius: 6,
@@ -511,4 +472,4 @@ const MySchedulePage: React.FC = () => {
   );
 };
 
-export default MySchedulePage;
+export default ManageUserSchedulePage;

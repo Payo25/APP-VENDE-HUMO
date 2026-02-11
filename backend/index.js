@@ -45,6 +45,21 @@ async function migrateDatabase() {
       );
     `);
     
+    // Create personal_schedules table for individual RSA schedules
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS personal_schedules (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        schedule_date DATE NOT NULL,
+        hours INTEGER DEFAULT 0,
+        minutes INTEGER DEFAULT 0,
+        notes TEXT,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, schedule_date)
+      );
+    `);
+    
     // Add contact_person, fax and email columns to health_centers if they don't exist
     await pool.query(`
       ALTER TABLE health_centers 
@@ -769,6 +784,63 @@ app.put('/api/physicians/:id', async (req, res) => {
 app.delete('/api/physicians/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM physicians WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// ========== PERSONAL SCHEDULES ENDPOINTS ==========
+app.get('/api/personal-schedules', async (req, res) => {
+  const { userId, month, year } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM personal_schedules 
+       WHERE user_id=$1 
+       AND EXTRACT(MONTH FROM schedule_date)=$2 
+       AND EXTRACT(YEAR FROM schedule_date)=$3
+       ORDER BY schedule_date`,
+      [userId, month, year]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/personal-schedules', async (req, res) => {
+  const { userId, scheduleDate, hours, minutes, notes } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO personal_schedules (user_id, schedule_date, hours, minutes, notes) 
+       VALUES ($1, $2, $3, $4, $5) 
+       ON CONFLICT (user_id, schedule_date) 
+       DO UPDATE SET hours=$3, minutes=$4, notes=$5, lastmodified=CURRENT_TIMESTAMP
+       RETURNING *`,
+      [userId, scheduleDate, hours || 0, minutes || 0, notes || '']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/personal-schedules/:id', async (req, res) => {
+  const { hours, minutes, notes } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE personal_schedules SET hours=$1, minutes=$2, notes=$3, lastmodified=CURRENT_TIMESTAMP WHERE id=$4 RETURNING *',
+      [hours || 0, minutes || 0, notes || '', req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/personal-schedules/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM personal_schedules WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });

@@ -11,6 +11,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import CallHoursPage from './pages/CallHoursPage';
 import MySchedulePage from './pages/MySchedulePage';
+import ManageUserSchedulePage from './pages/ManageUserSchedulePage';
 import PayrollPage from './pages/RSAReportPage';
 import FormsReportPage from './pages/FormsReportPage';
 import HealthCentersPage from './pages/HealthCentersPage';
@@ -107,6 +108,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <MySchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manage-user-schedule"
+            element={
+              <ProtectedRoute>
+                <ManageUserSchedulePage />
               </ProtectedRoute>
             }
           />

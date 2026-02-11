@@ -223,7 +223,7 @@ const DashboardPage: React.FC = () => {
         )}
         {localStorage.getItem('role') === 'Scheduler' && (
           <button
-            onClick={() => navigate('/call-hours')}
+            onClick={() => navigate('/manage-user-schedule')}
             style={{
               width: '100%',
               padding: '12px 0',
