@@ -17,6 +17,7 @@ import FormsReportPage from './pages/FormsReportPage';
 import HealthCentersPage from './pages/HealthCentersPage';
 import PhysiciansPage from './pages/PhysiciansPage';
 import RsaEmailsPage from './pages/RsaEmailsPage';
+import InvoicesPage from './pages/InvoicesPage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -143,6 +144,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <RsaEmailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/invoices"
+            element={
+              <ProtectedRoute>
+                <InvoicesPage />
               </ProtectedRoute>
             }
           />

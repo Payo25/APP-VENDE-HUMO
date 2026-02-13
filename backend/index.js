@@ -104,6 +104,27 @@ async function migrateDatabase() {
         lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Create invoices table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id SERIAL PRIMARY KEY,
+        invoice_number INTEGER NOT NULL,
+        invoice_date DATE NOT NULL,
+        due_date DATE,
+        health_center_id INTEGER,
+        health_center_name VARCHAR(255) NOT NULL,
+        health_center_address TEXT,
+        line_items JSONB NOT NULL DEFAULT '[]',
+        notes TEXT,
+        subtotal DECIMAL(10,2) DEFAULT 0,
+        total DECIMAL(10,2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_by_user_id INTEGER,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
     
     console.log('✅ Database schema updated');
   } catch (err) {
@@ -1045,6 +1066,107 @@ app.put('/api/rsa-emails/:id', async (req, res) => {
 app.delete('/api/rsa-emails/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM rsa_emails WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// ========== INVOICES ENDPOINTS ==========
+app.get('/api/invoices', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM invoices ORDER BY invoice_number DESC');
+    res.json(result.rows.map(inv => ({
+      id: inv.id,
+      invoiceNumber: inv.invoice_number,
+      invoiceDate: inv.invoice_date,
+      dueDate: inv.due_date,
+      healthCenterId: inv.health_center_id,
+      healthCenterName: inv.health_center_name,
+      healthCenterAddress: inv.health_center_address,
+      lineItems: inv.line_items,
+      notes: inv.notes,
+      subtotal: inv.subtotal,
+      total: inv.total,
+      status: inv.status,
+      createdByUserId: inv.created_by_user_id,
+      createdAt: inv.createdat,
+      lastModified: inv.lastmodified
+    })));
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/invoices/next-number', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COALESCE(MAX(invoice_number), 0) + 1 as next FROM invoices');
+    res.json({ nextNumber: result.rows[0].next });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/invoices/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM invoices WHERE id=$1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = result.rows[0];
+    res.json({
+      id: inv.id,
+      invoiceNumber: inv.invoice_number,
+      invoiceDate: inv.invoice_date,
+      dueDate: inv.due_date,
+      healthCenterId: inv.health_center_id,
+      healthCenterName: inv.health_center_name,
+      healthCenterAddress: inv.health_center_address,
+      lineItems: inv.line_items,
+      notes: inv.notes,
+      subtotal: inv.subtotal,
+      total: inv.total,
+      status: inv.status,
+      createdByUserId: inv.created_by_user_id,
+      createdAt: inv.createdat,
+      lastModified: inv.lastmodified
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/invoices', async (req, res) => {
+  const { invoiceNumber, invoiceDate, dueDate, healthCenterName, healthCenterAddress, lineItems, notes, subtotal, total, status, createdByUserId } = req.body;
+  if (!invoiceNumber || !invoiceDate || !healthCenterName) {
+    return res.status(400).json({ error: 'Invoice number, date, and health center are required' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO invoices (invoice_number, invoice_date, due_date, health_center_name, health_center_address, line_items, notes, subtotal, total, status, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [invoiceNumber, invoiceDate, dueDate || null, healthCenterName, healthCenterAddress || '', JSON.stringify(lineItems || []), notes || '', subtotal || 0, total || 0, status || 'Pending', createdByUserId || null]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/invoices/:id', async (req, res) => {
+  const { invoiceNumber, invoiceDate, dueDate, healthCenterName, healthCenterAddress, lineItems, notes, subtotal, total, status } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE invoices SET invoice_number=$1, invoice_date=$2, due_date=$3, health_center_name=$4, health_center_address=$5, line_items=$6, notes=$7, subtotal=$8, total=$9, status=$10, lastmodified=CURRENT_TIMESTAMP WHERE id=$11 RETURNING *`,
+      [invoiceNumber, invoiceDate, dueDate || null, healthCenterName, healthCenterAddress || '', JSON.stringify(lineItems || []), notes || '', subtotal || 0, total || 0, status || 'Pending', req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/invoices/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM invoices WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });

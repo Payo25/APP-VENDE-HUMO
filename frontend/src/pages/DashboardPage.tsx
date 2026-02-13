@@ -224,6 +224,31 @@ const DashboardPage: React.FC = () => {
               📧 RSA Emails
             </a>
           )}
+          {localStorage.getItem('role') === 'Business Assistant' && (
+            <a
+              href="/invoices"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #1a237e 0%, #283593 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(26,35,126,0.08)',
+                transition: 'background 0.2s',
+                marginBottom: 12
+              }}
+              tabIndex={0}
+              aria-label="Manage Invoices"
+            >
+              🧾 Invoices
+            </a>
+          )}
         </div>
         {localStorage.getItem('role') === 'Registered Surgical Assistant' && (
           <button
