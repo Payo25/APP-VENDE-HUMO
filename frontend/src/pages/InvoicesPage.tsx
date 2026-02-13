@@ -269,11 +269,23 @@ const InvoicesPage: React.FC = () => {
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>(786) 448-9020</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>info@proassisting.net</p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <h2 style={{ margin: 0, fontSize: 36, fontWeight: 800, color: '#1a237e', letterSpacing: 2 }}>INVOICE</h2>
-              <p style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 600 }}>#{viewInvoice.invoiceNumber}</p>
-              <p style={{ margin: '4px 0', fontSize: 13, color: '#777' }}>Submitted: {formatDate(viewInvoice.invoiceDate)}</p>
+            <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <img src={process.env.PUBLIC_URL + '/logo.jpg'} alt="ProAssisting Logo" style={{ height: 80, marginBottom: 10 }} />
+              <table style={{ borderCollapse: 'collapse', border: '1px solid #333' }}>
+                <thead>
+                  <tr><th style={{ padding: '6px 24px', border: '1px solid #333', fontSize: 14, fontWeight: 700, background: '#f5f5f5' }}>Invoice #</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td style={{ padding: '6px 24px', border: '1px solid #333', fontSize: 16, fontWeight: 600, textAlign: 'center' }}>{viewInvoice.invoiceNumber}</td></tr>
+                </tbody>
+              </table>
             </div>
+          </div>
+
+          {/* Invoice Title + Date */}
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#1a237e' }}>Invoice</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 600, color: '#e91e63' }}>Submitted on {formatDate(viewInvoice.invoiceDate)}</p>
           </div>
 
           {/* Bill To */}
