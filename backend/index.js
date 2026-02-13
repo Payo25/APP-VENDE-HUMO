@@ -192,6 +192,8 @@ app.get('/api/health', async (req, res) => {
       database: result.rows[0],
       userCount: userCheck.rows[0].count,
       hasEnvVar: !!process.env.DATABASE_URL,
+      sendgridConfigured: !!process.env.SENDGRID_API_KEY,
+      emailFrom: process.env.NOTIFICATION_EMAIL_FROM || 'not set',
       sampleFormDate: formData.date,
       sampleFormDateType: typeof formData.date,
       sampleFormDob: formData.dob,
