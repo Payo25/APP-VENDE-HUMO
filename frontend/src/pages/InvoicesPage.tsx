@@ -236,7 +236,7 @@ const InvoicesPage: React.FC = () => {
     return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   };
 
-  const formatCurrency = (n: number) => `$${(n || 0).toFixed(2)}`;
+  const formatCurrency = (n: number | string) => `$${(parseFloat(String(n)) || 0).toFixed(2)}`;
 
   const filteredInvoices = invoices.filter(inv => {
     if (filterStatus && inv.status !== filterStatus) return false;
