@@ -208,6 +208,29 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Test email endpoint - sends a test email via SendGrid
+app.get('/api/test-email', async (req, res) => {
+  const toEmail = req.query.to;
+  if (!toEmail) return res.status(400).json({ error: 'Provide ?to=email@example.com' });
+  
+  if (!process.env.SENDGRID_API_KEY) {
+    return res.json({ success: false, error: 'SENDGRID_API_KEY not set' });
+  }
+  
+  try {
+    const msg = {
+      to: toEmail,
+      from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+      subject: 'Test Email from Surgical App',
+      html: '<h2>Test Email</h2><p>If you received this, SendGrid is working correctly!</p>',
+    };
+    await sgMail.send(msg);
+    res.json({ success: true, message: `Test email sent to ${toEmail} from ${msg.from}` });
+  } catch (error) {
+    res.json({ success: false, error: error.message, details: error.response ? error.response.body : null });
+  }
+});
+
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, 'build')));
 
