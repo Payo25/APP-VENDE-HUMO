@@ -23,6 +23,7 @@ const FormsListPage: React.FC = () => {
   const [filterCaseType, setFilterCaseType] = useState(initialFilters.filterCaseType || '');
   const [filterCreatedBy, setFilterCreatedBy] = useState(initialFilters.filterCreatedBy || '');
   const [filterStatus, setFilterStatus] = useState(initialFilters.filterStatus || '');
+  const [filterHealthCenter, setFilterHealthCenter] = useState(initialFilters.filterHealthCenter || '');
   const [sortPatientAlpha, setSortPatientAlpha] = useState<'asc' | 'desc' | ''>(initialFilters.sortPatientAlpha || '');
   const [sortDate, setSortDate] = useState<'asc' | 'desc' | ''>(initialFilters.sortDate || '');
   const [filterDateFrom, setFilterDateFrom] = useState(initialFilters.filterDateFrom || '');
@@ -35,13 +36,14 @@ const FormsListPage: React.FC = () => {
       filterCaseType,
       filterCreatedBy,
       filterStatus,
+      filterHealthCenter,
       sortPatientAlpha,
       sortDate,
       filterDateFrom,
       filterDateTo
     };
     sessionStorage.setItem('formsListFilters', JSON.stringify(filters));
-  }, [filterProcedure, filterCaseType, filterCreatedBy, filterStatus, sortPatientAlpha, sortDate, filterDateFrom, filterDateTo]);
+  }, [filterProcedure, filterCaseType, filterCreatedBy, filterStatus, filterHealthCenter, sortPatientAlpha, sortDate, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetch(API_URL)
@@ -129,6 +131,9 @@ const FormsListPage: React.FC = () => {
   if (filterStatus) {
     filteredForms = filteredForms.filter(f => f.status === filterStatus);
   }
+  if (filterHealthCenter) {
+    filteredForms = filteredForms.filter(f => f.healthCenterName === filterHealthCenter);
+  }
   
   // Apply date range filter
   if (filterDateFrom) {
@@ -170,6 +175,7 @@ const FormsListPage: React.FC = () => {
   const uniqueCaseTypes = Array.from(new Set(forms.map(f => f.caseType).filter(Boolean)));
   const uniqueCreatedBy = Array.from(new Set(forms.map(f => f.createdByFullName || f.createdBy).filter(Boolean)));
   const uniqueStatuses = Array.from(new Set(forms.map(f => f.status).filter(Boolean)));
+  const uniqueHealthCenters = Array.from(new Set(forms.map(f => f.healthCenterName).filter(Boolean))).sort();
 
   // Pagination logic
   const indexOfLastForm = currentPage * formsPerPage;
@@ -355,6 +361,29 @@ const FormsListPage: React.FC = () => {
             
             <div>
               <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
+                Health Center
+              </label>
+              <select
+                value={filterHealthCenter}
+                onChange={(e) => setFilterHealthCenter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  fontSize: 14,
+                  background: '#fff'
+                }}
+              >
+                <option value="">All Health Centers</option>
+                {uniqueHealthCenters.map(hc => (
+                  <option key={hc} value={hc}>{hc}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: '#2d3a4b' }}>
                 Status
               </label>
               <select
@@ -421,6 +450,7 @@ const FormsListPage: React.FC = () => {
                   setFilterCaseType('');
                   setFilterCreatedBy('');
                   setFilterStatus('');
+                  setFilterHealthCenter('');
                   setFilterDateFrom('');
                   setFilterDateTo('');
                   setSortPatientAlpha('');
