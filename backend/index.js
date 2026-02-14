@@ -1173,8 +1173,25 @@ app.delete('/api/invoices/:id', async (req, res) => {
   }
 });
 
-// Send invoice via email
-app.post('/api/invoices/:id/send-email', async (req, res) => {
+// Toggle invoice status
+app.put('/api/invoices/:id/status', async (req, res) => {
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'Status is required' });
+  try {
+    const result = await pool.query(
+      'UPDATE invoices SET status=$1, lastmodified=CURRENT_TIMESTAMP WHERE id=$2 RETURNING *',
+      [status, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    res.json({ success: true, status: result.rows[0].status });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Send invoice via email (with optional file attachment)
+const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+app.post('/api/invoices/:id/send-email', invoiceUpload.single('attachment'), async (req, res) => {
   const { recipientEmail } = req.body;
   if (!recipientEmail) return res.status(400).json({ error: 'Recipient email is required' });
 
@@ -1250,12 +1267,24 @@ app.post('/api/invoices/:id/send-email', async (req, res) => {
 
     const sgMail = require('@sendgrid/mail');
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    await sgMail.send({
+    const mailMsg = {
       to: recipientEmail,
       from: emailFrom,
       subject: `Invoice #${inv.invoice_number} from Proassisting Inc.`,
       html: html
-    });
+    };
+
+    // Attach file if provided
+    if (req.file) {
+      mailMsg.attachments = [{
+        content: req.file.buffer.toString('base64'),
+        filename: req.file.originalname,
+        type: req.file.mimetype,
+        disposition: 'attachment'
+      }];
+    }
+
+    await sgMail.send(mailMsg);
 
     // Update status to Sent if currently Pending
     if (inv.status === 'Pending') {

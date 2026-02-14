@@ -69,6 +69,7 @@ const InvoicesPage: React.FC = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Admin') {
@@ -235,22 +236,47 @@ const InvoicesPage: React.FC = () => {
 
   const handlePrint = () => window.print();
 
+  const statusOrder = ['Pending', 'Sent', 'Paid', 'Overdue', 'Cancelled'];
+  const handleStatusToggle = async (inv: Invoice) => {
+    const currentIdx = statusOrder.indexOf(inv.status);
+    const nextStatus = statusOrder[(currentIdx + 1) % statusOrder.length];
+    try {
+      const res = await fetch(`${API_BASE_URL}/invoices/${inv.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      if (res.ok) {
+        fetchInvoices();
+      } else {
+        setError('Failed to update status');
+      }
+    } catch {
+      setError('Network error');
+    }
+  };
+
   const handleSendEmail = async () => {
     if (!recipientEmail.trim() || !viewInvoice) return;
     setSending(true);
     setError('');
     setSuccess('');
     try {
+      const formData = new FormData();
+      formData.append('recipientEmail', recipientEmail);
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile);
+      }
       const res = await fetch(`${API_BASE_URL}/invoices/${viewInvoice.id}/send-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipientEmail })
+        body: formData
       });
       const data = await res.json();
       if (res.ok) {
         setSuccess(data.message || 'Invoice sent!');
         setShowEmailModal(false);
         setRecipientEmail('');
+        setAttachmentFile(null);
         fetchInvoices();
       } else {
         setError(data.error || 'Failed to send email');
@@ -300,7 +326,12 @@ const InvoicesPage: React.FC = () => {
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Recipient email address" style={{ flex: 1, minWidth: 200, padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15 }} />
               <button onClick={handleSendEmail} disabled={sending || !recipientEmail.trim()} style={{ padding: '10px 20px', background: sending ? '#ccc' : 'linear-gradient(90deg, #e91e63 0%, #c2185b 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: sending ? 'default' : 'pointer' }}>{sending ? 'Sending...' : 'Send'}</button>
-              <button onClick={() => { setShowEmailModal(false); setRecipientEmail(''); }} style={{ padding: '10px 20px', background: '#757575', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => { setShowEmailModal(false); setRecipientEmail(''); setAttachmentFile(null); }} style={{ padding: '10px 20px', background: '#757575', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontWeight: 600, fontSize: 14, color: '#1a237e' }}>📎 Attach Document:</label>
+              <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={e => setAttachmentFile(e.target.files?.[0] || null)} style={{ fontSize: 14 }} />
+              {attachmentFile && <span style={{ fontSize: 13, color: '#555' }}>{attachmentFile.name} ({(attachmentFile.size / 1024).toFixed(0)} KB)</span>}
             </div>
           </div>
         )}
@@ -592,6 +623,7 @@ const InvoicesPage: React.FC = () => {
                       <button onClick={() => openView(inv)} style={{ padding: '5px 10px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>View</button>
                       <button onClick={() => openEdit(inv)} style={{ padding: '5px 10px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Edit</button>
                       <button onClick={() => handleDelete(inv.id)} style={{ padding: '5px 10px', background: '#e53935', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Delete</button>
+                      <button onClick={() => handleStatusToggle(inv)} title={`Click to change status`} style={{ padding: '5px 10px', background: '#7b1fa2', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Status</button>
                     </div>
                   </td>
                 </tr>
