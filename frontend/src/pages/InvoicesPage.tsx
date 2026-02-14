@@ -65,6 +65,11 @@ const InvoicesPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterHealthCenter, setFilterHealthCenter] = useState('');
 
+  // Email state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sending, setSending] = useState(false);
+
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Admin') {
       navigate('/dashboard');
@@ -230,6 +235,33 @@ const InvoicesPage: React.FC = () => {
 
   const handlePrint = () => window.print();
 
+  const handleSendEmail = async () => {
+    if (!recipientEmail.trim() || !viewInvoice) return;
+    setSending(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/invoices/${viewInvoice.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipientEmail })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(data.message || 'Invoice sent!');
+        setShowEmailModal(false);
+        setRecipientEmail('');
+        fetchInvoices();
+      } else {
+        setError(data.error || 'Failed to send email');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const formatDate = (d: string) => {
     if (!d) return '';
     const date = new Date(d + 'T00:00:00');
@@ -258,7 +290,20 @@ const InvoicesPage: React.FC = () => {
         <div className="no-print" style={{ marginBottom: 16, display: 'flex', gap: 10 }}>
           <button onClick={() => { setActiveTab('list'); setViewInvoice(null); }} style={{ padding: '10px 20px', background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>← Back to Invoices</button>
           <button onClick={handlePrint} style={{ padding: '10px 20px', background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>🖨️ Print</button>
+          <button onClick={() => setShowEmailModal(true)} style={{ padding: '10px 20px', background: 'linear-gradient(90deg, #e91e63 0%, #c2185b 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>📧 Send Email</button>
         </div>
+        {error && <div style={{ background: '#ffe0e0', color: '#c00', padding: 12, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
+        {success && <div style={{ background: '#e0ffe0', color: '#080', padding: 12, borderRadius: 8, marginBottom: 12 }}>{success}</div>}
+        {showEmailModal && (
+          <div style={{ background: '#f5f7ff', padding: 20, borderRadius: 10, marginBottom: 16, border: '1px solid #d0d5dd' }}>
+            <h3 style={{ margin: '0 0 12px', color: '#1a237e' }}>Send Invoice #{viewInvoice.invoiceNumber} via Email</h3>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Recipient email address" style={{ flex: 1, minWidth: 200, padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15 }} />
+              <button onClick={handleSendEmail} disabled={sending || !recipientEmail.trim()} style={{ padding: '10px 20px', background: sending ? '#ccc' : 'linear-gradient(90deg, #e91e63 0%, #c2185b 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: sending ? 'default' : 'pointer' }}>{sending ? 'Sending...' : 'Send'}</button>
+              <button onClick={() => { setShowEmailModal(false); setRecipientEmail(''); }} style={{ padding: '10px 20px', background: '#757575', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        )}
         <div className="invoice-view" style={{ background: '#fff', padding: 40, borderRadius: 10, boxShadow: '0 2px 16px rgba(0,0,0,0.08)' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 30, flexWrap: 'wrap' }}>
