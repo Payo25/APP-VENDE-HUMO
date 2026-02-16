@@ -76,6 +76,12 @@ async function migrateDatabase() {
       ADD COLUMN IF NOT EXISTS start_time VARCHAR(10),
       ADD COLUMN IF NOT EXISTS end_time VARCHAR(10);
     `);
+
+    // Add reminder_sent column to track email reminders
+    await pool.query(`
+      ALTER TABLE personal_schedules
+      ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
+    `);
     
     // Add contact_person, fax and email columns to health_centers if they don't exist
     await pool.query(`
@@ -1305,6 +1311,89 @@ app.post('/api/invoices/:id/send-email', invoiceUpload.single('attachment'), asy
   }
 });
 
+// ========== SURGERY REMINDER SYSTEM ==========
+// Checks every 5 minutes for surgeries starting within the next 30 minutes
+// and sends email reminders to the assigned RSA/Team Leader
+async function checkAndSendReminders() {
+  if (!process.env.SENDGRID_API_KEY) {
+    return; // SendGrid not configured, skip silently
+  }
+  try {
+    // Get current date and time in server timezone
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const reminderWindowEnd = currentMinutes + 30; // 30 minutes from now
+
+    // Query today's schedules that haven't had reminders sent and have a start_time
+    const result = await pool.query(
+      `SELECT ps.*, u.fullname 
+       FROM personal_schedules ps 
+       JOIN users u ON ps.user_id = u.id 
+       WHERE ps.schedule_date = $1 
+       AND ps.start_time IS NOT NULL 
+       AND ps.start_time != '' 
+       AND (ps.reminder_sent IS NULL OR ps.reminder_sent = false)`,
+      [todayStr]
+    );
+
+    for (const schedule of result.rows) {
+      // Parse start_time (format: "HH:MM" or "H:MM")
+      const timeParts = schedule.start_time.split(':');
+      if (timeParts.length !== 2) continue;
+      const scheduleMinutes = parseInt(timeParts[0]) * 60 + parseInt(timeParts[1]);
+
+      // Check if the surgery starts within the next 30 minutes (but not already past)
+      if (scheduleMinutes > currentMinutes && scheduleMinutes <= reminderWindowEnd) {
+        // Look up email from rsa_emails table
+        const emailResult = await pool.query(
+          'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)',
+          [schedule.fullname]
+        );
+
+        if (emailResult.rows.length === 0) {
+          console.log(`⏰ Reminder skipped for "${schedule.fullname}" - no email found in RSA Emails`);
+          // Mark as sent anyway to avoid repeated log spam
+          await pool.query('UPDATE personal_schedules SET reminder_sent = true WHERE id = $1', [schedule.id]);
+          continue;
+        }
+
+        const recipientEmail = emailResult.rows[0].email;
+        const timeRange = schedule.start_time + (schedule.end_time ? ` - ${schedule.end_time}` : '');
+        const physician = schedule.physician_name || 'N/A';
+        const healthCenter = schedule.health_center_name || 'N/A';
+        const notes = schedule.notes || '';
+        const minutesUntil = scheduleMinutes - currentMinutes;
+
+        const msg = {
+          to: recipientEmail,
+          from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+          subject: `⏰ Reminder: Surgery in ${minutesUntil} minutes - ${todayStr}`,
+          html: `<h2>⏰ Surgery Reminder</h2>
+            <p>Hello <strong>${schedule.fullname}</strong>,</p>
+            <p>This is a reminder that you have a surgery scheduled in approximately <strong>${minutesUntil} minutes</strong>.</p>
+            <table style="border-collapse:collapse;width:100%;max-width:500px">
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${todayStr}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${timeRange}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Physician</td><td style="padding:8px;border:1px solid #ddd">${physician}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Health Center</td><td style="padding:8px;border:1px solid #ddd">${healthCenter}</td></tr>
+              ${notes ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Notes</td><td style="padding:8px;border:1px solid #ddd">${notes}</td></tr>` : ''}
+            </table>
+            <p style="margin-top:16px;color:#666">Please prepare accordingly. Good luck!</p>`,
+        };
+
+        await sgMail.send(msg);
+        console.log(`⏰ Reminder email sent to ${recipientEmail} (${schedule.fullname}) - surgery at ${schedule.start_time}`);
+
+        // Mark reminder as sent
+        await pool.query('UPDATE personal_schedules SET reminder_sent = true WHERE id = $1', [schedule.id]);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Reminder check failed:', error.message);
+  }
+}
+
 // Catch-all: serve React app for all non-API, non-static routes
 app.get(/(.*)/, (req, res) => {
   // If the request starts with /api or /uploads, skip
@@ -1322,6 +1411,13 @@ app.get(/(.*)/, (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Start the surgery reminder checker (runs every 5 minutes)
+  setInterval(checkAndSendReminders, 5 * 60 * 1000);
+  // Run once on startup after a short delay
+  setTimeout(checkAndSendReminders, 10 * 1000);
+  console.log('Surgery reminder checker started (checks every 5 minutes)');
+
   // Log all registered routes for debugging
   if (app._router && app._router.stack) {
     app._router.stack.forEach((middleware) => {
