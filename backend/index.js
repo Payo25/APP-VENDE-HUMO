@@ -21,11 +21,54 @@ const fs = require('fs');
 const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
 const sgMail = require('@sendgrid/mail');
 const twilio = require('twilio');
+const jwt = require('jsonwebtoken');
+
+// JWT secret - use env var in production, fallback for dev
+const JWT_SECRET = process.env.JWT_SECRET || 'surgical-forms-jwt-secret-change-in-production';
+const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
 
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ========== JWT AUTHENTICATION MIDDLEWARE ==========
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // { id, username, role }
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid or expired token.' });
+  }
+}
+
+// Helper: require specific roles
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions.' });
+    }
+    next();
+  };
+}
+
+// Apply JWT authentication to all /api/* routes EXCEPT login and health check
+const PUBLIC_PATHS = ['/api/login', '/api/health'];
+app.use('/api', (req, res, next) => {
+  const fullPath = '/api' + (req.path === '/' ? '' : req.path);
+  if (PUBLIC_PATHS.includes(fullPath)) {
+    return next();
+  }
+  authenticateToken(req, res, next);
+});
 
 // Auto-migrate database on startup
 async function migrateDatabase() {
@@ -701,7 +744,13 @@ app.post('/api/login', async (req, res) => {
     console.log('Password match:', match);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
     logAudit('LOGIN', username, { userId: user.id });
-    res.json({ id: user.id, username: user.username, role: user.role, fullName: user.fullname || user.fullName });
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullname || user.fullName },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    res.json({ id: user.id, username: user.username, role: user.role, fullName: user.fullname || user.fullName, token });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });

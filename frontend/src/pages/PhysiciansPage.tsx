@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const PHYSICIANS_URL = `${API_BASE_URL}/physicians`;
@@ -33,7 +34,7 @@ const PhysiciansPage: React.FC = () => {
 
   const fetchPhysicians = async () => {
     try {
-      const res = await fetch(PHYSICIANS_URL);
+      const res = await authFetch(PHYSICIANS_URL);
       const data = await res.json();
       setPhysicians(data);
     } catch (err) {
@@ -50,7 +51,7 @@ const PhysiciansPage: React.FC = () => {
     const url = editingPhysician ? `${PHYSICIANS_URL}/${editingPhysician.id}` : PHYSICIANS_URL;
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -87,7 +88,7 @@ const PhysiciansPage: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this physician?')) return;
 
     try {
-      const res = await fetch(`${PHYSICIANS_URL}/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${PHYSICIANS_URL}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess('Physician deleted successfully!');
         fetchPhysicians();

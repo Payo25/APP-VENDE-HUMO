@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SurgicalForm } from '../types/SurgicalForm';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -18,7 +19,7 @@ const EditFormPage: React.FC = () => {
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
 
   useEffect(() => {
-    fetch(`${API_URL}/${id}`)
+    authFetch(`${API_URL}/${id}`)
       .then(res => res.json())
       .then(data => {
         setForm(data);
@@ -31,7 +32,7 @@ const EditFormPage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    fetch('/api/health-centers')
+    authFetch('/api/health-centers')
       .then(res => res.json())
       .then(setHealthCenters)
       .catch(() => setHealthCenters([]));
@@ -56,14 +57,14 @@ const EditFormPage: React.FC = () => {
       if (selectedFile) {
         formData.append('surgeryFormFile', selectedFile);
       }
-      const res = await fetch(`${API_URL}/${id}`, {
+      const res = await authFetch(`${API_URL}/${id}`, {
         method: 'PUT',
         body: formData,
       });
       if (!res.ok) throw new Error('Failed to update form');
       setSuccess('Form updated successfully!');
       // Audit log: edit sensitive form
-      await fetch(AUDIT_ACTION_URL, {
+      await authFetch(AUDIT_ACTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

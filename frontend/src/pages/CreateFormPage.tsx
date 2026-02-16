@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -40,7 +41,7 @@ const CreateFormPage: React.FC = () => {
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
 
   useEffect(() => {
-    fetch('/api/health-centers')
+    authFetch('/api/health-centers')
       .then(res => res.json())
       .then(setHealthCenters)
       .catch(() => setHealthCenters([]));
@@ -86,14 +87,14 @@ const CreateFormPage: React.FC = () => {
     formData.append('surgeryFormFile', surgeryFormFile);
 
     try {
-      const res = await fetch(API_URL, {
+      const res = await authFetch(API_URL, {
         method: 'POST',
         body: formData,
       });
       if (!res.ok) throw new Error('Failed to create form');
       setSuccess('Form created successfully!');
       // Audit log: create sensitive form
-      await fetch(AUDIT_ACTION_URL, {
+      await authFetch(AUDIT_ACTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

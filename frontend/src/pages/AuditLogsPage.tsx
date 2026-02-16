@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDateForFilename } from '../utils/dateFormat';
+import { authFetch } from '../utils/api';
 
 interface AuditLog {
   timestamp: string;
@@ -20,7 +21,7 @@ const AuditLogsPage: React.FC = () => {
 
   useEffect(() => {
     if (userRole !== 'Admin') return;
-    fetch(API_URL)
+    authFetch(API_URL)
       .then(res => res.json())
       .then(setLogs)
       .catch(() => setError('Failed to fetch audit logs'));

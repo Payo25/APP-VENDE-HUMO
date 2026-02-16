@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatDateForFilename } from '../utils/dateFormat';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -46,7 +47,7 @@ const FormsListPage: React.FC = () => {
   }, [filterProcedure, filterCaseType, filterCreatedBy, filterStatus, filterHealthCenter, sortPatientAlpha, sortDate, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
-    fetch(API_URL)
+    authFetch(API_URL)
       .then(res => res.json())
       .then(data => {
         const userId = localStorage.getItem('userId');
@@ -509,7 +510,7 @@ const FormsListPage: React.FC = () => {
                         <button
                           onClick={async () => {
                             const newStatus = form.status === 'processed' ? 'pending' : 'processed';
-                            await fetch(`${API_URL}/${form.id}`, {
+                            await authFetch(`${API_URL}/${form.id}`, {
                               method: 'PUT',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ status: newStatus })
@@ -613,7 +614,7 @@ const FormsListPage: React.FC = () => {
                           onClick={async () => {
                             if (!window.confirm(`Are you sure you want to delete the form for ${form.patientName}?`)) return;
                             try {
-                              const res = await fetch(`${API_URL}/${form.id}`, { method: 'DELETE' });
+                              const res = await authFetch(`${API_URL}/${form.id}`, { method: 'DELETE' });
                               if (res.ok) {
                                 setForms(forms => forms.filter(f => f.id !== form.id));
                               } else {

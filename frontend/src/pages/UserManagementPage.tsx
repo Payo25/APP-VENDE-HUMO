@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 // Use relative URLs for API endpoints so frontend works both locally and when deployed
 const API_BASE_URL = '/api';
@@ -32,7 +33,7 @@ const UserManagementPage: React.FC = () => {
 
   useEffect(() => {
     if (userRole !== 'Admin') return;
-    fetch(API_URL)
+    authFetch(API_URL)
       .then(res => res.json())
       .then(setUsers)
       .catch(() => setError('Failed to fetch users'));
@@ -74,7 +75,7 @@ const UserManagementPage: React.FC = () => {
       setError('All fields are required.');
       return;
     }
-    const res = await fetch(API_URL, {
+    const res = await authFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: email, password, role, fullName }),
@@ -92,7 +93,7 @@ const UserManagementPage: React.FC = () => {
 
   const handleDeleteUser = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
-    const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+    const res = await authFetch(`${API_URL}/${id}`, { method: 'DELETE' });
     if (res.ok) {
       setSuccess('User deleted.');
       setUsers(users.filter(u => u.id !== id));
@@ -117,7 +118,7 @@ const UserManagementPage: React.FC = () => {
 
     try {
       // Step 1: Reassign forms
-      const reassignRes = await fetch(`${API_URL}/${reassignUser.id}/reassign-forms`, {
+      const reassignRes = await authFetch(`${API_URL}/${reassignUser.id}/reassign-forms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetUserId: selectedTargetUserId }),
@@ -132,7 +133,7 @@ const UserManagementPage: React.FC = () => {
       const reassignData = await reassignRes.json();
 
       // Step 2: Delete user
-      const deleteRes = await fetch(`${API_URL}/${reassignUser.id}`, { method: 'DELETE' });
+      const deleteRes = await authFetch(`${API_URL}/${reassignUser.id}`, { method: 'DELETE' });
       
       if (deleteRes.ok) {
         setSuccess(`${reassignData.message}. User deleted successfully.`);
@@ -158,7 +159,7 @@ const UserManagementPage: React.FC = () => {
   const handleEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    const res = await fetch(`${API_URL}/${editingUser.id}`, {
+    const res = await authFetch(`${API_URL}/${editingUser.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -198,7 +199,7 @@ const UserManagementPage: React.FC = () => {
     }
     setPasswordChangeError('');
     setPasswordChangeSuccess('');
-    const res = await fetch(`${API_URL}/${changingPasswordUser.id}/password`, {
+    const res = await authFetch(`${API_URL}/${changingPasswordUser.id}/password`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: newPassword, actor: localStorage.getItem('user') })

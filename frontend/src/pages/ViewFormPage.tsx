@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SurgicalForm } from '../types/SurgicalForm';
 import { formatDate } from '../utils/dateFormat';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -18,13 +19,13 @@ const ViewFormPage: React.FC = () => {
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
-    fetch(`${API_URL}/${id}`)
+    authFetch(`${API_URL}/${id}`)
       .then(res => res.json())
       .then(data => {
         setForm(data);
         setLoading(false);
         // Audit log: view sensitive form
-        fetch(AUDIT_ACTION_URL, {
+        authFetch(AUDIT_ACTION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const PERSONAL_SCHEDULES_URL = `${API_BASE_URL}/personal-schedules`;
@@ -63,7 +64,7 @@ const MySchedulePage: React.FC = () => {
   // Fetch personal schedules for the month
   useEffect(() => {
     setLoading(true);
-    fetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`)
+    authFetch(`${PERSONAL_SCHEDULES_URL}?userId=${userId}&month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
         setSchedules(data);

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const PERSONAL_SCHEDULES_URL = `${API_BASE_URL}/personal-schedules`;
@@ -91,19 +92,19 @@ const ManageUserSchedulePage: React.FC = () => {
       return;
     }
     // Fetch RSAs and Team Leaders
-    fetch(USERS_URL)
+    authFetch(USERS_URL)
       .then(res => res.json())
       .then(data => {
         const rsas = data.filter((u: User) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader');
         setUsers(rsas);
       });
     // Fetch physicians
-    fetch(PHYSICIANS_URL)
+    authFetch(PHYSICIANS_URL)
       .then(res => res.json())
       .then(data => setPhysicians(data))
       .catch(() => {});
     // Fetch health centers
-    fetch(HEALTH_CENTERS_URL)
+    authFetch(HEALTH_CENTERS_URL)
       .then(res => res.json())
       .then(data => setHealthCenters(data))
       .catch(() => {});
@@ -112,7 +113,7 @@ const ManageUserSchedulePage: React.FC = () => {
   const fetchSchedules = useCallback(() => {
     if (!selectedUserId) return;
     setLoading(true);
-    fetch(`${PERSONAL_SCHEDULES_URL}?userId=${selectedUserId}&month=${month}&year=${year}`)
+    authFetch(`${PERSONAL_SCHEDULES_URL}?userId=${selectedUserId}&month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
         setSchedules(data);
@@ -142,7 +143,7 @@ const ManageUserSchedulePage: React.FC = () => {
       let res;
       if (editModal.entry) {
         // Edit existing entry via PUT
-        res = await fetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, {
+        res = await authFetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -157,7 +158,7 @@ const ManageUserSchedulePage: React.FC = () => {
         });
       } else {
         // Add new entry via POST
-        res = await fetch(PERSONAL_SCHEDULES_URL, {
+        res = await authFetch(PERSONAL_SCHEDULES_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -190,7 +191,7 @@ const ManageUserSchedulePage: React.FC = () => {
     if (!window.confirm('Remove this schedule entry?')) return;
     
     try {
-      const res = await fetch(`${PERSONAL_SCHEDULES_URL}/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${PERSONAL_SCHEDULES_URL}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess('Schedule removed!');
         fetchSchedules();

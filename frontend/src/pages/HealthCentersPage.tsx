@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_URL = '/api/health-centers';
 
@@ -24,7 +25,7 @@ const HealthCentersPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(API_URL)
+    authFetch(API_URL)
       .then(res => res.json())
       .then(setHealthCenters)
       .catch(() => setError('Failed to fetch health centers'));
@@ -38,7 +39,7 @@ const HealthCentersPage: React.FC = () => {
       setError('Name is required.');
       return;
     }
-    const res = await fetch(API_URL, {
+    const res = await authFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, address, phone, fax, email, contactPerson })
@@ -53,7 +54,7 @@ const HealthCentersPage: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Delete this health center?')) return;
-    const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+    const res = await authFetch(`${API_URL}/${id}`, { method: 'DELETE' });
     if (res.ok) {
       setSuccess('Health center deleted.');
     } else {
@@ -78,7 +79,7 @@ const HealthCentersPage: React.FC = () => {
       setError('Name is required.');
       return;
     }
-    const res = await fetch(`${API_URL}/${editing.id}`, {
+    const res = await authFetch(`${API_URL}/${editing.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: editName, address: editAddress, phone: editPhone, fax: editFax, email: editEmail, contactPerson: editContactPerson })

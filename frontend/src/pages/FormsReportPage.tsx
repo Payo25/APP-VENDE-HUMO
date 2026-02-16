@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { formatDateForFilename } from '../utils/dateFormat';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const FORMS_API_URL = `${API_BASE_URL}/forms`;
@@ -16,7 +17,7 @@ const FormsReportPage: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
-    fetch(FORMS_API_URL)
+    authFetch(FORMS_API_URL)
       .then(res => res.json())
       .then(data => {
         setForms(data);

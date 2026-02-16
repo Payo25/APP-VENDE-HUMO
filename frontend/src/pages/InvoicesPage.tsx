@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 
@@ -82,7 +83,7 @@ const InvoicesPage: React.FC = () => {
 
   const fetchInvoices = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/invoices`);
+      const res = await authFetch(`${API_BASE_URL}/invoices`);
       const data = await res.json();
       setInvoices(data);
     } catch {
@@ -94,7 +95,7 @@ const InvoicesPage: React.FC = () => {
 
   const fetchHealthCenters = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/health-centers`);
+      const res = await authFetch(`${API_BASE_URL}/health-centers`);
       const data = await res.json();
       setHealthCenters(data);
     } catch { /* ignore */ }
@@ -102,7 +103,7 @@ const InvoicesPage: React.FC = () => {
 
   const fetchNextNumber = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/invoices/next-number`);
+      const res = await authFetch(`${API_BASE_URL}/invoices/next-number`);
       const data = await res.json();
       setInvoiceNumber(data.nextNumber);
     } catch { /* ignore */ }
@@ -200,7 +201,7 @@ const InvoicesPage: React.FC = () => {
     const url = editing ? `${API_BASE_URL}/invoices/${editing.id}` : `${API_BASE_URL}/invoices`;
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -222,7 +223,7 @@ const InvoicesPage: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (!window.confirm('Delete this invoice?')) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/invoices/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_BASE_URL}/invoices/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess('Invoice deleted');
         fetchInvoices();
@@ -241,7 +242,7 @@ const InvoicesPage: React.FC = () => {
     const currentIdx = statusOrder.indexOf(inv.status);
     const nextStatus = statusOrder[(currentIdx + 1) % statusOrder.length];
     try {
-      const res = await fetch(`${API_BASE_URL}/invoices/${inv.id}/status`, {
+      const res = await authFetch(`${API_BASE_URL}/invoices/${inv.id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus })
@@ -267,7 +268,7 @@ const InvoicesPage: React.FC = () => {
       if (attachmentFile) {
         formData.append('attachment', attachmentFile);
       }
-      const res = await fetch(`${API_BASE_URL}/invoices/${viewInvoice.id}/send-email`, {
+      const res = await authFetch(`${API_BASE_URL}/invoices/${viewInvoice.id}/send-email`, {
         method: 'POST',
         body: formData
       });

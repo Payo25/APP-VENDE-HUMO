@@ -23,11 +23,14 @@ const LoginPage: React.FC = () => {
       const user = await res.json();
       localStorage.setItem('user', user.username);
       localStorage.setItem('role', user.role);
-      localStorage.setItem('userId', user.id); // Store userId for form creation
+      localStorage.setItem('userId', user.id);
+      localStorage.setItem('fullName', user.fullName || '');
+      localStorage.setItem('token', user.token); // JWT token for API auth
       // Audit log login
+      const token = user.token;
       await fetch(AUDIT_LOGIN_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ actor: user.username })
       });
       navigate('/dashboard');

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const RSA_EMAILS_URL = `${API_BASE_URL}/rsa-emails`;
@@ -33,7 +34,7 @@ const RsaEmailsPage: React.FC = () => {
 
   const fetchEmails = async () => {
     try {
-      const res = await fetch(RSA_EMAILS_URL);
+      const res = await authFetch(RSA_EMAILS_URL);
       const data = await res.json();
       setRsaEmails(data);
     } catch (err) {
@@ -57,7 +58,7 @@ const RsaEmailsPage: React.FC = () => {
     const url = editing ? `${RSA_EMAILS_URL}/${editing.id}` : RSA_EMAILS_URL;
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -92,7 +93,7 @@ const RsaEmailsPage: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this email?')) return;
     try {
-      const res = await fetch(`${RSA_EMAILS_URL}/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${RSA_EMAILS_URL}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess('Email deleted successfully!');
         fetchEmails();

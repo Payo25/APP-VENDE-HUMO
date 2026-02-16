@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/call-hours`;
@@ -44,7 +45,7 @@ const CallHoursPage: React.FC = () => {
   // Fetch all RSAs and Team Leaders for BA/Team Leader, or just self for RSA
   useEffect(() => {
     // Both BA and RSA fetch all RSAs and Team Leaders for display
-    fetch(USERS_API_URL)
+    authFetch(USERS_API_URL)
       .then(res => res.json())
       .then(data => setUsers(data.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader')));
   }, [userRole, userId]);
@@ -54,7 +55,7 @@ const CallHoursPage: React.FC = () => {
     setLoading(true);
     setSuccess('');
     setError('');
-    fetch(`${API_URL}?month=${month}&year=${year}`)
+    authFetch(`${API_URL}?month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
         const hasData = Object.keys(data).length > 0;
@@ -138,7 +139,7 @@ const CallHoursPage: React.FC = () => {
   const handleSave = async () => {
     setError('');
     setSuccess('');
-    const res = await fetch(API_URL, {
+    const res = await authFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -437,7 +438,7 @@ cells.push(
                       setIsEditMode(false);
                       // Reload data to discard changes
                       setLoading(true);
-                      fetch(`${API_URL}?month=${month}&year=${year}`)
+                      authFetch(`${API_URL}?month=${month}&year=${year}`)
                         .then(res => res.json())
                         .then(data => {
                           setAssignments(data);

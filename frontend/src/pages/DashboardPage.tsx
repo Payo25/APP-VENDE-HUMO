@@ -10,12 +10,12 @@ const DashboardPage: React.FC = () => {
 
   const handleLogout = async () => {
     const user = localStorage.getItem('user');
-    localStorage.removeItem('user');
-    localStorage.removeItem('role');
+    const token = localStorage.getItem('token');
+    localStorage.clear(); // Remove all auth data including JWT token
     // Audit log logout
     await fetch(AUDIT_LOGOUT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ actor: user })
     });
     window.location.href = '/';

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import { formatDate } from '../utils/dateFormat';
+import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const FORMS_API_URL = `${API_BASE_URL}/forms`;
@@ -31,8 +32,8 @@ const PayrollPage: React.FC = () => {
     
     // Fetch users and forms first
     Promise.all([
-      fetch(USERS_API_URL).then(res => res.json()),
-      fetch(FORMS_API_URL).then(res => res.json())
+      authFetch(USERS_API_URL).then(res => res.json()),
+      authFetch(FORMS_API_URL).then(res => res.json())
     ]).then(([usersData, formsData]) => {
       setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
       setForms(formsData);
@@ -64,7 +65,7 @@ const PayrollPage: React.FC = () => {
     // Fetch call hours for all relevant months
     const callHoursPromises = Array.from(monthsToFetch).map(key => {
       const [year, month] = key.split('-');
-      return fetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`)
+      return authFetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`)
         .then(res => res.json())
         .catch(() => ({}));
     });
