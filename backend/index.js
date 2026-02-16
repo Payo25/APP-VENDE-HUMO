@@ -84,6 +84,12 @@ async function migrateDatabase() {
       ADD COLUMN IF NOT EXISTS fax VARCHAR(50),
       ADD COLUMN IF NOT EXISTS email VARCHAR(255);
     `);
+
+    // Add fax column to physicians if it doesn't exist
+    await pool.query(`
+      ALTER TABLE physicians 
+      ADD COLUMN IF NOT EXISTS fax VARCHAR(50);
+    `);
     
     // Add firstassistant and secondassistant columns to forms if they don't exist
     await pool.query(`
@@ -828,11 +834,11 @@ app.get('/api/physicians', async (req, res) => {
 });
 
 app.post('/api/physicians', async (req, res) => {
-  const { name, specialty, phone, email } = req.body;
+  const { name, specialty, phone, email, fax } = req.body;
   try {
     const result = await pool.query(
-      'INSERT INTO physicians (name, specialty, phone, email) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, specialty, phone || '', email || '']
+      'INSERT INTO physicians (name, specialty, phone, email, fax) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [name, specialty, phone || '', email || '', fax || '']
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -845,11 +851,11 @@ app.post('/api/physicians', async (req, res) => {
 });
 
 app.put('/api/physicians/:id', async (req, res) => {
-  const { name, specialty, phone, email } = req.body;
+  const { name, specialty, phone, email, fax } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE physicians SET name=$1, specialty=$2, phone=$3, email=$4, lastmodified=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
-      [name, specialty, phone || '', email || '', req.params.id]
+      'UPDATE physicians SET name=$1, specialty=$2, phone=$3, email=$4, fax=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *',
+      [name, specialty, phone || '', email || '', fax || '', req.params.id]
     );
     res.json(result.rows[0]);
   } catch (err) {

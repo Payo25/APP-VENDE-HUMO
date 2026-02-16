@@ -10,6 +10,7 @@ interface Physician {
   specialty: string;
   phone: string;
   email: string;
+  fax: string;
 }
 
 const PhysiciansPage: React.FC = () => {
@@ -18,7 +19,7 @@ const PhysiciansPage: React.FC = () => {
   const [physicians, setPhysicians] = useState<Physician[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingPhysician, setEditingPhysician] = useState<Physician | null>(null);
-  const [formData, setFormData] = useState({ name: '', specialty: '', phone: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', specialty: '', phone: '', email: '', fax: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -58,7 +59,7 @@ const PhysiciansPage: React.FC = () => {
       if (res.ok) {
         setSuccess(editingPhysician ? 'Physician updated successfully!' : 'Physician added successfully!');
         setShowModal(false);
-        setFormData({ name: '', specialty: '', phone: '', email: '' });
+        setFormData({ name: '', specialty: '', phone: '', email: '', fax: '' });
         setEditingPhysician(null);
         fetchPhysicians();
       } else {
@@ -76,7 +77,8 @@ const PhysiciansPage: React.FC = () => {
       name: physician.name,
       specialty: physician.specialty,
       phone: physician.phone,
-      email: physician.email
+      email: physician.email,
+      fax: physician.fax || ''
     });
     setShowModal(true);
   };
@@ -99,7 +101,7 @@ const PhysiciansPage: React.FC = () => {
 
   const openAddModal = () => {
     setEditingPhysician(null);
-    setFormData({ name: '', specialty: '', phone: '', email: '' });
+    setFormData({ name: '', specialty: '', phone: '', email: '', fax: '' });
     setShowModal(true);
   };
 
@@ -153,6 +155,7 @@ const PhysiciansPage: React.FC = () => {
                 <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Name</th>
                 <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Specialty</th>
                 <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Phone</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Fax</th>
                 <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Email</th>
                 <th style={{ padding: 12, textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Actions</th>
               </tr>
@@ -160,7 +163,7 @@ const PhysiciansPage: React.FC = () => {
             <tbody>
               {physicians.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: 20, textAlign: 'center', color: '#666' }}>
+                  <td colSpan={6} style={{ padding: 20, textAlign: 'center', color: '#666' }}>
                     No physicians found. Click "Add Physician" to get started.
                   </td>
                 </tr>
@@ -170,6 +173,7 @@ const PhysiciansPage: React.FC = () => {
                     <td style={{ padding: 12 }}>{physician.name}</td>
                     <td style={{ padding: 12 }}>{physician.specialty}</td>
                     <td style={{ padding: 12 }}>{physician.phone}</td>
+                    <td style={{ padding: 12 }}>{physician.fax}</td>
                     <td style={{ padding: 12 }}>{physician.email}</td>
                     <td style={{ padding: 12, textAlign: 'center' }}>
                       <button
@@ -286,6 +290,24 @@ const PhysiciansPage: React.FC = () => {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: 16,
+                      border: '2px solid #e5e7eb',
+                      borderRadius: 6,
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>
+                    Fax
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.fax}
+                    onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
