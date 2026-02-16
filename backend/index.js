@@ -1314,16 +1314,32 @@ app.post('/api/invoices/:id/send-email', invoiceUpload.single('attachment'), asy
 // ========== SURGERY REMINDER SYSTEM ==========
 // Checks every 5 minutes for surgeries starting within the next 30 minutes
 // and sends email reminders to the assigned RSA/Team Leader
-async function checkAndSendReminders() {
+
+// Helper: get current date/time in local timezone (defaults to US Central)
+function getLocalNow() {
+  const tz = process.env.REMINDER_TIMEZONE || 'America/Chicago';
+  const now = new Date();
+  const localStr = now.toLocaleString('en-US', { timeZone: tz });
+  return new Date(localStr);
+}
+
+async function checkAndSendReminders(dryRun = false) {
+  const logs = [];
   if (!process.env.SENDGRID_API_KEY) {
-    return; // SendGrid not configured, skip silently
+    logs.push('SendGrid not configured, skipping reminders');
+    return logs;
   }
   try {
-    // Get current date and time in server timezone
-    const now = new Date();
+    // Get current date and time in LOCAL timezone (not UTC)
+    const now = getLocalNow();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+    const currentMinutes = currentHour * 60 + currentMin;
     const reminderWindowEnd = currentMinutes + 30; // 30 minutes from now
+
+    logs.push(`Local time: ${currentHour}:${String(currentMin).padStart(2, '0')} (${todayStr})`);
+    logs.push(`Checking for surgeries starting between ${currentMinutes} and ${reminderWindowEnd} minutes from midnight`);
 
     // Query today's schedules that haven't had reminders sent and have a start_time
     const result = await pool.query(
@@ -1337,11 +1353,18 @@ async function checkAndSendReminders() {
       [todayStr]
     );
 
+    logs.push(`Found ${result.rows.length} pending schedule(s) for today`);
+
     for (const schedule of result.rows) {
       // Parse start_time (format: "HH:MM" or "H:MM")
       const timeParts = schedule.start_time.split(':');
-      if (timeParts.length !== 2) continue;
+      if (timeParts.length !== 2) {
+        logs.push(`Skipping schedule #${schedule.id} - invalid time format: ${schedule.start_time}`);
+        continue;
+      }
       const scheduleMinutes = parseInt(timeParts[0]) * 60 + parseInt(timeParts[1]);
+
+      logs.push(`Schedule #${schedule.id}: ${schedule.fullname} at ${schedule.start_time} (${scheduleMinutes} min) - window: ${currentMinutes}-${reminderWindowEnd}`);
 
       // Check if the surgery starts within the next 30 minutes (but not already past)
       if (scheduleMinutes > currentMinutes && scheduleMinutes <= reminderWindowEnd) {
@@ -1352,9 +1375,10 @@ async function checkAndSendReminders() {
         );
 
         if (emailResult.rows.length === 0) {
-          console.log(`⏰ Reminder skipped for "${schedule.fullname}" - no email found in RSA Emails`);
-          // Mark as sent anyway to avoid repeated log spam
-          await pool.query('UPDATE personal_schedules SET reminder_sent = true WHERE id = $1', [schedule.id]);
+          logs.push(`⏰ Reminder skipped for "${schedule.fullname}" - no email found in RSA Emails`);
+          if (!dryRun) {
+            await pool.query('UPDATE personal_schedules SET reminder_sent = true WHERE id = $1', [schedule.id]);
+          }
           continue;
         }
 
@@ -1364,6 +1388,11 @@ async function checkAndSendReminders() {
         const healthCenter = schedule.health_center_name || 'N/A';
         const notes = schedule.notes || '';
         const minutesUntil = scheduleMinutes - currentMinutes;
+
+        if (dryRun) {
+          logs.push(`✅ WOULD SEND reminder to ${recipientEmail} (${schedule.fullname}) - surgery in ${minutesUntil} min`);
+          continue;
+        }
 
         const msg = {
           to: recipientEmail,
@@ -1383,16 +1412,36 @@ async function checkAndSendReminders() {
         };
 
         await sgMail.send(msg);
-        console.log(`⏰ Reminder email sent to ${recipientEmail} (${schedule.fullname}) - surgery at ${schedule.start_time}`);
+        logs.push(`⏰ Reminder email sent to ${recipientEmail} (${schedule.fullname}) - surgery at ${schedule.start_time}`);
 
         // Mark reminder as sent
         await pool.query('UPDATE personal_schedules SET reminder_sent = true WHERE id = $1', [schedule.id]);
+      } else if (scheduleMinutes <= currentMinutes) {
+        logs.push(`  → Already past, skipping`);
+      } else {
+        logs.push(`  → Not yet in 30-min window, skipping`);
       }
     }
   } catch (error) {
+    logs.push(`❌ Reminder check failed: ${error.message}`);
     console.error('❌ Reminder check failed:', error.message);
   }
+  return logs;
 }
+
+// Test/debug endpoint to check reminder status
+app.get('/api/reminder-check', async (req, res) => {
+  const dryRun = req.query.send !== 'true'; // Default is dry run, add ?send=true to actually send
+  const logs = await checkAndSendReminders(dryRun);
+  const now = getLocalNow();
+  res.json({
+    mode: dryRun ? 'DRY RUN (add ?send=true to actually send)' : 'LIVE - emails sent',
+    serverTimeUTC: new Date().toISOString(),
+    localTime: now.toLocaleString('en-US'),
+    timezone: process.env.REMINDER_TIMEZONE || 'America/Chicago',
+    logs
+  });
+});
 
 // Catch-all: serve React app for all non-API, non-static routes
 app.get(/(.*)/, (req, res) => {
