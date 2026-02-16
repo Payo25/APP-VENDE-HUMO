@@ -86,7 +86,7 @@ const ManageUserSchedulePage: React.FC = () => {
   const [tempEndTime, setTempEndTime] = useState('15:00');
 
   useEffect(() => {
-    if (userRole !== 'Scheduler' && userRole !== 'Business Assistant') {
+    if (userRole !== 'Scheduler' && userRole !== 'Business Assistant' && userRole !== 'Team Leader') {
       navigate('/dashboard');
       return;
     }

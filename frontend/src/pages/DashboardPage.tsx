@@ -271,7 +271,7 @@ const DashboardPage: React.FC = () => {
             📅 My Schedule
           </button>
         )}
-        {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant') && (
+        {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <button
             onClick={() => navigate('/manage-user-schedule')}
             style={{
