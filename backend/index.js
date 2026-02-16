@@ -285,7 +285,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Test email endpoint - sends a test email via SendGrid
-app.get('/api/test-email', async (req, res) => {
+app.get('/api/test-email', requireRole('Admin'), async (req, res) => {
   const toEmail = req.query.to;
   if (!toEmail) return res.status(400).json({ error: 'Provide ?to=email@example.com' });
   
@@ -587,7 +587,7 @@ app.delete('/api/forms/:id', async (req, res) => {
 });
 
 // --- Users API using PostgreSQL ---
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, username, role, fullname, hourly_rate FROM users ORDER BY id DESC');
     // Map fullname to fullName for frontend compatibility and remove raw fullname
@@ -604,7 +604,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireRole('Admin'), async (req, res) => {
   const { username, role, password, actor, fullName } = req.body;
   if (!username || !role || !password || !fullName) return res.status(400).json({ error: 'Missing fields' });
   try {
@@ -621,7 +621,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireRole('Admin'), async (req, res) => {
   const { role, fullName, username, hourlyRate } = req.body;
   try {
     const result = await pool.query(
@@ -637,7 +637,7 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 // --- Reassign forms from one user to another ---
-app.post('/api/users/:id/reassign-forms', async (req, res) => {
+app.post('/api/users/:id/reassign-forms', requireRole('Admin'), async (req, res) => {
   try {
     const fromUserId = req.params.id;
     const { targetUserId } = req.body;
@@ -669,7 +669,7 @@ app.post('/api/users/:id/reassign-forms', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireRole('Admin'), async (req, res) => {
   try {
     // Check if user has created any forms
     const formsCheck = await pool.query(
@@ -694,7 +694,7 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // --- Password change endpoint ---
-app.put('/api/users/:id/password', async (req, res) => {
+app.put('/api/users/:id/password', requireRole('Admin'), async (req, res) => {
   const userId = req.params.id;
   const { password } = req.body;
   if (!password) {
@@ -710,7 +710,7 @@ app.put('/api/users/:id/password', async (req, res) => {
 });
 
 // --- Audit Logs API using PostgreSQL ---
-app.get('/api/audit-logs', async (req, res) => {
+app.get('/api/audit-logs', requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM audit_logs ORDER BY timestamp DESC');
     res.json(result.rows);
@@ -772,9 +772,8 @@ app.get('/api/call-hours', async (req, res) => {
   }
 });
 
-app.post('/api/call-hours', async (req, res) => {
+app.post('/api/call-hours', requireRole('Business Assistant', 'Team Leader'), async (req, res) => {
   const { month, year, assignments, actorRole } = req.body;
-  if (actorRole !== 'Business Assistant' && actorRole !== 'Team Leader') return res.status(403).json({ error: 'Forbidden' });
   if (!month || !year || !assignments) return res.status(400).json({ error: 'Missing params' });
   try {
     const exists = await pool.query(
@@ -841,7 +840,7 @@ app.get('/api/health-centers', async (req, res) => {
   }
 });
 
-app.post('/api/health-centers', async (req, res) => {
+app.post('/api/health-centers', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { name, address, phone, fax, email, contactPerson } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
@@ -855,7 +854,7 @@ app.post('/api/health-centers', async (req, res) => {
   }
 });
 
-app.put('/api/health-centers/:id', async (req, res) => {
+app.put('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { name, address, phone, fax, email, contactPerson } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
@@ -869,7 +868,7 @@ app.put('/api/health-centers/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/health-centers/:id', async (req, res) => {
+app.delete('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM health_centers WHERE id=$1', [req.params.id]);
     res.json({ success: true });
@@ -888,7 +887,7 @@ app.get('/api/physicians', async (req, res) => {
   }
 });
 
-app.post('/api/physicians', async (req, res) => {
+app.post('/api/physicians', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { name, specialty, phone, email, fax } = req.body;
   try {
     const result = await pool.query(
@@ -905,7 +904,7 @@ app.post('/api/physicians', async (req, res) => {
   }
 });
 
-app.put('/api/physicians/:id', async (req, res) => {
+app.put('/api/physicians/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { name, specialty, phone, email, fax } = req.body;
   try {
     const result = await pool.query(
@@ -918,7 +917,7 @@ app.put('/api/physicians/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/physicians/:id', async (req, res) => {
+app.delete('/api/physicians/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM physicians WHERE id=$1', [req.params.id]);
     res.json({ success: true });
@@ -1014,7 +1013,7 @@ async function sendScheduleEmailToRSA(userId, action, details) {
 }
 
 // ========== PERSONAL SCHEDULES ENDPOINTS ==========
-app.get('/api/personal-schedules', async (req, res) => {
+app.get('/api/personal-schedules', requireRole('Scheduler', 'Business Assistant', 'Team Leader', 'Registered Surgical Assistant'), async (req, res) => {
   const { userId, month, year } = req.query;
   try {
     const result = await pool.query(
@@ -1031,7 +1030,7 @@ app.get('/api/personal-schedules', async (req, res) => {
   }
 });
 
-app.post('/api/personal-schedules', async (req, res) => {
+app.post('/api/personal-schedules', requireRole('Scheduler', 'Business Assistant', 'Team Leader'), async (req, res) => {
   const { userId, scheduleDate, hours, minutes, notes, physicianName, healthCenterName, startTime, endTime } = req.body;
   try {
     const result = await pool.query(
@@ -1051,7 +1050,7 @@ app.post('/api/personal-schedules', async (req, res) => {
   }
 });
 
-app.put('/api/personal-schedules/:id', async (req, res) => {
+app.put('/api/personal-schedules/:id', requireRole('Scheduler', 'Business Assistant', 'Team Leader'), async (req, res) => {
   const { hours, minutes, notes, physicianName, healthCenterName, startTime, endTime } = req.body;
   try {
     const result = await pool.query(
@@ -1070,7 +1069,7 @@ app.put('/api/personal-schedules/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/personal-schedules/:id', async (req, res) => {
+app.delete('/api/personal-schedules/:id', requireRole('Scheduler', 'Business Assistant', 'Team Leader'), async (req, res) => {
   try {
     // Fetch schedule details before deleting (for email notification)
     const existing = await pool.query('SELECT * FROM personal_schedules WHERE id=$1', [req.params.id]);
@@ -1087,7 +1086,7 @@ app.delete('/api/personal-schedules/:id', async (req, res) => {
 });
 
 // ========== RSA EMAILS ENDPOINTS ==========
-app.get('/api/rsa-emails', async (req, res) => {
+app.get('/api/rsa-emails', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM rsa_emails ORDER BY rsa_name ASC');
     res.json(result.rows);
@@ -1096,7 +1095,7 @@ app.get('/api/rsa-emails', async (req, res) => {
   }
 });
 
-app.post('/api/rsa-emails', async (req, res) => {
+app.post('/api/rsa-emails', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { rsaName, email, phone, notes } = req.body;
   if (!rsaName || !email) return res.status(400).json({ error: 'Name and email are required' });
   try {
@@ -1110,7 +1109,7 @@ app.post('/api/rsa-emails', async (req, res) => {
   }
 });
 
-app.put('/api/rsa-emails/:id', async (req, res) => {
+app.put('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   const { rsaName, email, phone, notes } = req.body;
   if (!rsaName || !email) return res.status(400).json({ error: 'Name and email are required' });
   try {
@@ -1124,7 +1123,7 @@ app.put('/api/rsa-emails/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/rsa-emails/:id', async (req, res) => {
+app.delete('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM rsa_emails WHERE id=$1', [req.params.id]);
     res.json({ success: true });
@@ -1134,7 +1133,7 @@ app.delete('/api/rsa-emails/:id', async (req, res) => {
 });
 
 // ========== INVOICES ENDPOINTS ==========
-app.get('/api/invoices', async (req, res) => {
+app.get('/api/invoices', requireRole('Business Assistant'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM invoices ORDER BY invoice_number DESC');
     res.json(result.rows.map(inv => ({
@@ -1159,7 +1158,7 @@ app.get('/api/invoices', async (req, res) => {
   }
 });
 
-app.get('/api/invoices/next-number', async (req, res) => {
+app.get('/api/invoices/next-number', requireRole('Business Assistant'), async (req, res) => {
   try {
     const result = await pool.query('SELECT COALESCE(MAX(invoice_number), 0) + 1 as next FROM invoices');
     res.json({ nextNumber: result.rows[0].next });
@@ -1168,7 +1167,7 @@ app.get('/api/invoices/next-number', async (req, res) => {
   }
 });
 
-app.get('/api/invoices/:id', async (req, res) => {
+app.get('/api/invoices/:id', requireRole('Business Assistant'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM invoices WHERE id=$1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
@@ -1195,7 +1194,7 @@ app.get('/api/invoices/:id', async (req, res) => {
   }
 });
 
-app.post('/api/invoices', async (req, res) => {
+app.post('/api/invoices', requireRole('Business Assistant'), async (req, res) => {
   const { invoiceNumber, invoiceDate, dueDate, healthCenterName, healthCenterAddress, lineItems, notes, subtotal, total, status, createdByUserId } = req.body;
   if (!invoiceNumber || !invoiceDate || !healthCenterName) {
     return res.status(400).json({ error: 'Invoice number, date, and health center are required' });
@@ -1212,7 +1211,7 @@ app.post('/api/invoices', async (req, res) => {
   }
 });
 
-app.put('/api/invoices/:id', async (req, res) => {
+app.put('/api/invoices/:id', requireRole('Business Assistant'), async (req, res) => {
   const { invoiceNumber, invoiceDate, dueDate, healthCenterName, healthCenterAddress, lineItems, notes, subtotal, total, status } = req.body;
   try {
     const result = await pool.query(
@@ -1225,7 +1224,7 @@ app.put('/api/invoices/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/invoices/:id', async (req, res) => {
+app.delete('/api/invoices/:id', requireRole('Business Assistant'), async (req, res) => {
   try {
     await pool.query('DELETE FROM invoices WHERE id=$1', [req.params.id]);
     res.json({ success: true });
@@ -1235,7 +1234,7 @@ app.delete('/api/invoices/:id', async (req, res) => {
 });
 
 // Toggle invoice status
-app.put('/api/invoices/:id/status', async (req, res) => {
+app.put('/api/invoices/:id/status', requireRole('Business Assistant'), async (req, res) => {
   const { status } = req.body;
   if (!status) return res.status(400).json({ error: 'Status is required' });
   try {
@@ -1252,7 +1251,7 @@ app.put('/api/invoices/:id/status', async (req, res) => {
 
 // Send invoice via email (with optional file attachment)
 const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-app.post('/api/invoices/:id/send-email', invoiceUpload.single('attachment'), async (req, res) => {
+app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invoiceUpload.single('attachment'), async (req, res) => {
   const { recipientEmail } = req.body;
   if (!recipientEmail) return res.status(400).json({ error: 'Recipient email is required' });
 
@@ -1479,7 +1478,7 @@ async function checkAndSendReminders(dryRun = false) {
 }
 
 // Test/debug endpoint to check reminder status
-app.get('/api/reminder-check', async (req, res) => {
+app.get('/api/reminder-check', requireRole('Admin'), async (req, res) => {
   const dryRun = req.query.send !== 'true'; // Default is dry run, add ?send=true to actually send
   const logs = await checkAndSendReminders(dryRun);
   const now = getLocalNow();
