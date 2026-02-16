@@ -23,6 +23,8 @@ const sgMail = require('@sendgrid/mail');
 const twilio = require('twilio');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const sanitizeHtml = require('sanitize-html');
 
 // JWT secret - use env var in production, fallback for dev
 const JWT_SECRET = process.env.JWT_SECRET || 'surgical-forms-jwt-secret-change-in-production';
@@ -34,8 +36,38 @@ const app = express();
 // Trust proxy (required for rate limiting behind Azure App Service / IIS)
 app.set('trust proxy', 1);
 
-app.use(cors());
+// ========== SECURITY HEADERS (Helmet.js) ==========
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled so React SPA can load inline scripts/styles
+  crossOriginEmbedderPolicy: false, // Allow embedded resources
+}));
+
+// ========== CORS LOCKDOWN ==========
+const ALLOWED_ORIGINS = [
+  'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net',
+  process.env.APP_URL,
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (same-origin, server-to-server, mobile apps)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    // In development, allow localhost
+    if (origin.startsWith('http://localhost:')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
 app.use(express.json());
+
+// ========== INPUT SANITIZATION HELPER ==========
+// Escape HTML entities to prevent XSS in email templates
+function escapeHtml(str) {
+  if (!str) return '';
+  return sanitizeHtml(String(str), { allowedTags: [], allowedAttributes: {} });
+}
 
 // ========== RATE LIMITING ==========
 // Strict limiter for login — 10 attempts per 15 minutes per IP
@@ -979,19 +1011,20 @@ async function sendScheduleEmailToRSA(userId, action, details) {
     const rsaEmail = emailResult.rows[0].email;
 
     // Format schedule details for the email
-    const scheduleDate = details.schedule_date || details.scheduleDate || 'N/A';
-    const startTime = details.start_time || details.startTime || '';
-    const endTime = details.end_time || details.endTime || '';
-    const physician = details.physician_name || details.physicianName || '';
-    const healthCenter = details.health_center_name || details.healthCenterName || '';
-    const notes = details.notes || '';
+    const scheduleDate = escapeHtml(details.schedule_date || details.scheduleDate || 'N/A');
+    const startTime = escapeHtml(details.start_time || details.startTime || '');
+    const endTime = escapeHtml(details.end_time || details.endTime || '');
+    const physician = escapeHtml(details.physician_name || details.physicianName || '');
+    const healthCenter = escapeHtml(details.health_center_name || details.healthCenterName || '');
+    const notes = escapeHtml(details.notes || '');
     const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : 'N/A';
 
+    const safeFullName = escapeHtml(rsaFullName);
     let subject, html;
     if (action === 'CREATED') {
       subject = `New Schedule Entry - ${scheduleDate}`;
       html = `<h2>New Schedule Entry</h2>
-        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>Hello <strong>${safeFullName}</strong>,</p>
         <p>A new schedule entry has been added for you:</p>
         <table style="border-collapse:collapse;width:100%;max-width:500px">
           <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
@@ -1004,7 +1037,7 @@ async function sendScheduleEmailToRSA(userId, action, details) {
     } else if (action === 'UPDATED') {
       subject = `Schedule Updated - ${scheduleDate}`;
       html = `<h2>Schedule Entry Updated</h2>
-        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>Hello <strong>${safeFullName}</strong>,</p>
         <p>Your schedule entry has been updated:</p>
         <table style="border-collapse:collapse;width:100%;max-width:500px">
           <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
@@ -1017,7 +1050,7 @@ async function sendScheduleEmailToRSA(userId, action, details) {
     } else if (action === 'DELETED') {
       subject = `Schedule Entry Removed - ${scheduleDate}`;
       html = `<h2>Schedule Entry Removed</h2>
-        <p>Hello <strong>${rsaFullName}</strong>,</p>
+        <p>Hello <strong>${safeFullName}</strong>,</p>
         <p>A schedule entry has been removed from your schedule:</p>
         <table style="border-collapse:collapse;width:100%;max-width:500px">
           <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${scheduleDate}</td></tr>
@@ -1299,8 +1332,8 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
 
     const lineItemsHtml = lineItems.map((li, i) => `
       <tr style="border-bottom:1px solid #e0e0e0;background:${i % 2 === 0 ? '#fafafa' : '#fff'}">
-        <td style="padding:10px 16px;font-size:14px">${li.description || ''}</td>
-        <td style="padding:10px 16px;text-align:center;font-size:14px">${li.qty || 0}</td>
+        <td style="padding:10px 16px;font-size:14px">${escapeHtml(li.description || '')}</td>
+        <td style="padding:10px 16px;text-align:center;font-size:14px">${escapeHtml(String(li.qty || 0))}</td>
         <td style="padding:10px 16px;text-align:right;font-size:14px">${formatCurrency(li.unitPrice)}</td>
         <td style="padding:10px 16px;text-align:right;font-size:14px;font-weight:600">${formatCurrency(li.totalPrice)}</td>
       </tr>
@@ -1317,15 +1350,15 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
           <p style="margin:2px 0;color:#555;font-size:13px">info@proassisting.net</p>
         </div>
         <div style="text-align:right">
-          <h2 style="margin:0;font-size:28px;font-weight:800;color:#1a237e">INVOICE #${inv.invoice_number}</h2>
+          <h2 style="margin:0;font-size:28px;font-weight:800;color:#1a237e">INVOICE #${escapeHtml(String(inv.invoice_number))}</h2>
           <p style="margin:4px 0;font-size:13px;color:#777">Submitted: ${formatDate(inv.invoice_date)}</p>
           ${inv.due_date ? `<p style="margin:4px 0;font-size:13px;color:#777">Due: ${formatDate(inv.due_date)}</p>` : ''}
         </div>
       </div>
       <div style="background:#f5f7ff;padding:14px 18px;border-radius:8px;margin-bottom:20px">
         <p style="margin:0;font-weight:700;color:#1a237e;font-size:12px;text-transform:uppercase;letter-spacing:1px">Invoice For</p>
-        <p style="margin:6px 0 2px;font-weight:600;font-size:15px">${inv.health_center_name || ''}</p>
-        ${inv.health_center_address ? `<p style="margin:2px 0;color:#555;font-size:13px">${inv.health_center_address}</p>` : ''}
+        <p style="margin:6px 0 2px;font-weight:600;font-size:15px">${escapeHtml(inv.health_center_name || '')}</p>
+        ${inv.health_center_address ? `<p style="margin:2px 0;color:#555;font-size:13px">${escapeHtml(inv.health_center_address)}</p>` : ''}
       </div>
       <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
         <thead>
@@ -1338,7 +1371,7 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
         </thead>
         <tbody>${lineItemsHtml}</tbody>
       </table>
-      ${inv.notes ? `<div style="background:#f5f7ff;padding:12px 16px;border-radius:8px;margin-bottom:16px"><p style="margin:0;font-weight:700;color:#1a237e;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Notes</p><p style="margin:0;font-size:13px;color:#555">${inv.notes}</p></div>` : ''}
+      ${inv.notes ? `<div style="background:#f5f7ff;padding:12px 16px;border-radius:8px;margin-bottom:16px"><p style="margin:0;font-weight:700;color:#1a237e;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Notes</p><p style="margin:0;font-size:13px;color:#555">${escapeHtml(inv.notes)}</p></div>` : ''}
       <div style="text-align:right;margin-top:16px">
         <p style="margin:4px 0;font-size:14px"><strong>Subtotal:</strong> ${formatCurrency(inv.subtotal)}</p>
         <div style="display:inline-block;background:#1a237e;color:#fff;padding:10px 24px;border-radius:6px;margin-top:8px">
@@ -1460,10 +1493,10 @@ async function checkAndSendReminders(dryRun = false) {
         }
 
         const recipientEmail = emailResult.rows[0].email;
-        const timeRange = schedule.start_time + (schedule.end_time ? ` - ${schedule.end_time}` : '');
-        const physician = schedule.physician_name || 'N/A';
-        const healthCenter = schedule.health_center_name || 'N/A';
-        const notes = schedule.notes || '';
+        const timeRange = escapeHtml(schedule.start_time) + (schedule.end_time ? ` - ${escapeHtml(schedule.end_time)}` : '');
+        const physician = escapeHtml(schedule.physician_name || 'N/A');
+        const healthCenter = escapeHtml(schedule.health_center_name || 'N/A');
+        const notes = escapeHtml(schedule.notes || '');
         const minutesUntil = scheduleMinutes - currentMinutes;
 
         if (dryRun) {
@@ -1476,7 +1509,7 @@ async function checkAndSendReminders(dryRun = false) {
           from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
           subject: `⏰ Reminder: Surgery in ${minutesUntil} minutes - ${todayStr}`,
           html: `<h2>⏰ Surgery Reminder</h2>
-            <p>Hello <strong>${schedule.fullname}</strong>,</p>
+            <p>Hello <strong>${escapeHtml(schedule.fullname)}</strong>,</p>
             <p>This is a reminder that you have a surgery scheduled in approximately <strong>${minutesUntil} minutes</strong>.</p>
             <table style="border-collapse:collapse;width:100%;max-width:500px">
               <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Date</td><td style="padding:8px;border:1px solid #ddd">${todayStr}</td></tr>
