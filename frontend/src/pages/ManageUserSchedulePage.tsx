@@ -90,11 +90,11 @@ const ManageUserSchedulePage: React.FC = () => {
       navigate('/dashboard');
       return;
     }
-    // Fetch RSAs
+    // Fetch RSAs and Team Leaders
     fetch(USERS_URL)
       .then(res => res.json())
       .then(data => {
-        const rsas = data.filter((u: User) => u.role === 'Registered Surgical Assistant');
+        const rsas = data.filter((u: User) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader');
         setUsers(rsas);
       });
     // Fetch physicians

@@ -250,7 +250,7 @@ const DashboardPage: React.FC = () => {
             </a>
           )}
         </div>
-        {localStorage.getItem('role') === 'Registered Surgical Assistant' && (
+        {(localStorage.getItem('role') === 'Registered Surgical Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <button
             onClick={() => navigate('/call-hours-personal')}
             style={{

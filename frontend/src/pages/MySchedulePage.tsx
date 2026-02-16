@@ -53,9 +53,9 @@ const MySchedulePage: React.FC = () => {
   const [exportingPDF, setExportingPDF] = useState(false);
   const navigate = useNavigate();
 
-  // Redirect if not RSA
+  // Redirect if not RSA or Team Leader
   useEffect(() => {
-    if (userRole !== 'Registered Surgical Assistant') {
+    if (userRole !== 'Registered Surgical Assistant' && userRole !== 'Team Leader') {
       navigate('/dashboard');
     }
   }, [userRole, navigate]);
