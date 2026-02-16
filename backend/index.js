@@ -22,6 +22,7 @@ const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, S
 const sgMail = require('@sendgrid/mail');
 const twilio = require('twilio');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 
 // JWT secret - use env var in production, fallback for dev
 const JWT_SECRET = process.env.JWT_SECRET || 'surgical-forms-jwt-secret-change-in-production';
@@ -29,8 +30,36 @@ const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
 
 
 const app = express();
+
+// Trust proxy (required for rate limiting behind Azure App Service / IIS)
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
+
+// ========== RATE LIMITING ==========
+// Strict limiter for login — 10 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  keyGenerator: (req) => req.ip,
+});
+
+// General API limiter — 200 requests per minute per IP
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down.' },
+  keyGenerator: (req) => req.ip,
+});
+
+// Apply general limiter to all /api routes
+app.use('/api', apiLimiter);
 
 // ========== JWT AUTHENTICATION MIDDLEWARE ==========
 function authenticateToken(req, res, next) {
@@ -727,7 +756,7 @@ function logAudit(action, actor, details) {
 }
 
 // --- Login API ---
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
   console.log('Login attempt:', username);
   if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
