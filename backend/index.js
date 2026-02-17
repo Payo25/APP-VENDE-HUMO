@@ -962,7 +962,7 @@ app.get('/api/call-hours', requireRole('Admin', 'Business Assistant', 'Team Lead
   }
 });
 
-app.post('/api/call-hours', requireRole('Business Assistant', 'Team Leader'), async (req, res) => {
+app.post('/api/call-hours', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   const { month, year, assignments, actorRole } = req.body;
   if (!month || !year || !assignments) return res.status(400).json({ error: 'Missing params' });
   try {
