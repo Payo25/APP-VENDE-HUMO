@@ -27,8 +27,12 @@ const helmet = require('helmet');
 const sanitizeHtml = require('sanitize-html');
 const crypto = require('crypto');
 
-// JWT secret - use env var in production, fallback for dev
-const JWT_SECRET = process.env.JWT_SECRET || 'surgical-forms-jwt-secret-change-in-production';
+// JWT secret - MUST be set via environment variable
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Server cannot start securely.');
+  process.exit(1);
+}
 const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
 
 // Account lockout settings
@@ -346,31 +350,11 @@ async function sendSMSNotification(message) {
 // Database health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
-    const result = await pool.query('SELECT NOW() as time, current_database() as db');
-    const userCheck = await pool.query('SELECT COUNT(*) as count FROM users');
-    
-    // Debug: Check a specific form's date
-    const formCheck = await pool.query('SELECT id, date, dob FROM forms ORDER BY id DESC LIMIT 1');
-    const formData = formCheck.rows[0] || {};
-    
-    res.json({ 
-      status: 'ok', 
-      database: result.rows[0],
-      userCount: userCheck.rows[0].count,
-      hasEnvVar: !!process.env.DATABASE_URL,
-      sendgridConfigured: !!process.env.SENDGRID_API_KEY,
-      emailFrom: process.env.NOTIFICATION_EMAIL_FROM || 'not set',
-      sampleFormDate: formData.date,
-      sampleFormDateType: typeof formData.date,
-      sampleFormDob: formData.dob,
-      sampleFormDobType: typeof formData.dob
-    });
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok' });
   } catch (error) {
-    res.status(500).json({ 
-      status: 'error', 
-      message: error.message,
-      hasEnvVar: !!process.env.DATABASE_URL
-    });
+    console.error('Health check failed:', error.message);
+    res.status(500).json({ status: 'error' });
   }
 });
 
@@ -476,7 +460,7 @@ async function uploadToBlob(file) {
 
 
 // --- Forms API using PostgreSQL ---
-app.get('/api/forms', async (req, res) => {
+app.get('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
@@ -516,7 +500,7 @@ app.get('/api/forms', async (req, res) => {
   }
 });
 
-app.get('/api/forms/:id', async (req, res) => {
+app.get('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
@@ -526,10 +510,6 @@ app.get('/api/forms/:id', async (req, res) => {
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
-    
-    // Debug logging
-    console.log('Raw form.date from DB:', form.date, 'Type:', typeof form.date);
-    console.log('Raw form.dob from DB:', form.dob, 'Type:', typeof form.dob);
     
     const camelCaseForm = {
       id: form.id,
@@ -561,10 +541,7 @@ app.get('/api/forms/:id', async (req, res) => {
   }
 });
 
-app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
-  console.log('=== Form submission received ===');
-  console.log('Body:', req.body);
-  console.log('File:', req.file);
+app.post('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), upload.single('surgeryFormFile'), async (req, res) => {
   
   const {
     patientName, dob, insuranceCompany,
@@ -573,50 +550,26 @@ app.post('/api/forms', upload.single('surgeryFormFile'), async (req, res) => {
   
   // Validate required fields
   if (!patientName || !dob || !insuranceCompany || !healthCenterName || !date || !doctorName || !procedure || !caseType || !assistantType || !status || !createdByUserId || !req.file || (caseType !== 'Cancelled' && (!timeIn || !timeOut))) {
-    console.log('Validation failed:', {
-      patientName: !!patientName,
-      dob: !!dob,
-      insuranceCompany: !!insuranceCompany,
-      healthCenterName: !!healthCenterName,
-      date: !!date,
-      doctorName: !!doctorName,
-      procedure: !!procedure,
-      caseType: !!caseType,
-      status: !!status,
-      createdByUserId: !!createdByUserId,
-      file: !!req.file,
-      timeIn: !!timeIn,
-      timeOut: !!timeOut
-    });
     return res.status(400).json({ error: 'All fields are required.' });
   }
   
   try {
-    console.log('Uploading file to Azure Blob Storage...');
-    console.log('Container client exists:', !!containerClient);
-    console.log('File details:', { name: req.file.originalname, size: req.file.size, type: req.file.mimetype });
-    
     // Upload file to Azure Blob Storage and get URL
     const fileUrl = await uploadToBlob(req.file);
-    console.log('File uploaded to:', fileUrl);
-    
-    console.log('Inserting into database...');
     const result = await pool.query(
       `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, assistanttype, firstassistant, secondassistant, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
-    console.log('Form created successfully:', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('Error creating form:', err);
-    console.error('Error stack:', err.stack);
-    res.status(500).json({ error: 'Failed to create form', details: err.message, stack: err.stack });
+    console.error('Error creating form:', err.message);
+    res.status(500).json({ error: 'Failed to create form' });
   }
 });
 
 // --- PATCH: Support multipart/form-data for editing forms with/without file ---
-app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => {
+app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), upload.single('surgeryFormFile'), async (req, res) => {
   try {
     // Explicit mapping from camelCase to DB columns
     const fieldMap = {
@@ -632,9 +585,6 @@ app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => 
       caseType: 'casetype',
       assistantType: 'assistanttype',
       status: 'status',
-      createdBy: 'createdby',
-      surgeryFormFileUrl: 'surgeryformfileurl',
-      createdAt: 'createdat',
     };
     // Use req.body for text fields, req.file for file
     const fields = Object.keys(req.body).filter(k => fieldMap[k]);
@@ -667,7 +617,7 @@ app.put('/api/forms/:id', upload.single('surgeryFormFile'), async (req, res) => 
   }
 });
 
-app.delete('/api/forms/:id', async (req, res) => {
+app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM forms WHERE id = $1', [req.params.id]);
     res.status(204).end();
