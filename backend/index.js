@@ -25,10 +25,25 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const sanitizeHtml = require('sanitize-html');
+const crypto = require('crypto');
 
 // JWT secret - use env var in production, fallback for dev
 const JWT_SECRET = process.env.JWT_SECRET || 'surgical-forms-jwt-secret-change-in-production';
 const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
+
+// Account lockout settings
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 15;
+
+// Password complexity requirements
+function validatePassword(password) {
+  const errors = [];
+  if (!password || password.length < 8) errors.push('Password must be at least 8 characters.');
+  if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter.');
+  if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter.');
+  if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number.');
+  return errors;
+}
 
 
 const app = express();
@@ -121,8 +136,8 @@ function requireRole(...roles) {
   };
 }
 
-// Apply JWT authentication to all /api/* routes EXCEPT login and health check
-const PUBLIC_PATHS = ['/api/login', '/api/health'];
+// Apply JWT authentication to all /api/* routes EXCEPT login, health, and password reset
+const PUBLIC_PATHS = ['/api/login', '/api/health', '/api/forgot-password', '/api/reset-password'];
 app.use('/api', (req, res, next) => {
   const fullPath = '/api' + (req.path === '/' ? '' : req.path);
   if (PUBLIC_PATHS.includes(fullPath)) {
@@ -199,6 +214,20 @@ async function migrateDatabase() {
     await pool.query(`
       ALTER TABLE physicians 
       ADD COLUMN IF NOT EXISTS fax VARCHAR(50);
+    `);
+
+    // Add account lockout columns to users
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
+    `);
+
+    // Add password reset token columns to users
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP;
     `);
     
     // Add firstassistant and secondassistant columns to forms if they don't exist
@@ -668,6 +697,8 @@ app.get('/api/users', requireRole('Admin'), async (req, res) => {
 app.post('/api/users', requireRole('Admin'), async (req, res) => {
   const { username, role, password, actor, fullName } = req.body;
   if (!username || !role || !password || !fullName) return res.status(400).json({ error: 'Missing fields' });
+  const pwErrors = validatePassword(password);
+  if (pwErrors.length > 0) return res.status(400).json({ error: pwErrors.join(' ') });
   try {
     const exists = await pool.query('SELECT 1 FROM users WHERE username = $1', [username]);
     if (exists.rows.length > 0) return res.status(409).json({ error: 'User exists' });
@@ -761,9 +792,11 @@ app.put('/api/users/:id/password', requireRole('Admin'), async (req, res) => {
   if (!password) {
     return res.status(400).json({ error: 'New password is required.' });
   }
+  const pwErrors = validatePassword(password);
+  if (pwErrors.length > 0) return res.status(400).json({ error: pwErrors.join(' ') });
   try {
     const hashed = await bcrypt.hash(password, 10);
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, userId]);
+    await pool.query('UPDATE users SET password = $1, failed_login_attempts = 0, locked_until = NULL WHERE id = $2', [hashed, userId]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update password.' });
@@ -800,10 +833,38 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       console.log('User not found:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // Check if account is locked
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      logAudit('LOGIN_LOCKED', username, { userId: user.id, minutesLeft });
+      return res.status(423).json({ error: `Account is locked. Try again in ${minutesLeft} minute(s).` });
+    }
+
     console.log('User found, checking password...');
     const match = await bcrypt.compare(password, user.password);
     console.log('Password match:', match);
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (!match) {
+      // Increment failed attempts
+      const attempts = (user.failed_login_attempts || 0) + 1;
+      if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        // Lock the account
+        const lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000).toISOString();
+        await pool.query('UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3', [attempts, lockUntil, user.id]);
+        logAudit('ACCOUNT_LOCKED', username, { userId: user.id, attempts });
+        return res.status(423).json({ error: `Account locked after ${MAX_LOGIN_ATTEMPTS} failed attempts. Try again in ${LOCKOUT_DURATION_MINUTES} minutes.` });
+      } else {
+        await pool.query('UPDATE users SET failed_login_attempts = $1 WHERE id = $2', [attempts, user.id]);
+        logAudit('LOGIN_FAILED', username, { userId: user.id, attempts });
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    }
+
+    // Successful login — reset failed attempts and lock
+    if (user.failed_login_attempts > 0 || user.locked_until) {
+      await pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
+    }
     logAudit('LOGIN', username, { userId: user.id });
     // Generate JWT token
     const token = jwt.sign(
@@ -814,6 +875,95 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     res.json({ id: user.id, username: user.username, role: user.role, fullName: user.fullname || user.fullName, token });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Forgot Password (RSA & Team Leader only) ---
+app.post('/api/forgot-password', loginLimiter, async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username is required.' });
+  try {
+    const result = await pool.query('SELECT id, role, fullname FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+
+    // Always return success to avoid user enumeration — but only actually send for allowed roles
+    if (!user || (user.role !== 'Registered Surgical Assistant' && user.role !== 'Team Leader')) {
+      console.log(`Forgot password: user "${username}" not found or role not allowed`);
+      return res.json({ success: true, message: 'If your account exists and is eligible, a reset link has been sent to your email.' });
+    }
+
+    // Find email from rsa_emails table by matching fullname
+    const emailResult = await pool.query(
+      'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)',
+      [user.fullname]
+    );
+    if (emailResult.rows.length === 0) {
+      console.log(`Forgot password: no email found for "${user.fullname}" in rsa_emails`);
+      return res.json({ success: true, message: 'If your account exists and is eligible, a reset link has been sent to your email.' });
+    }
+
+    const recipientEmail = emailResult.rows[0].email;
+
+    // Generate secure reset token (valid for 1 hour)
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3', [token, expires, user.id]);
+
+    const appUrl = process.env.APP_URL || 'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net';
+    const resetLink = `${appUrl}/reset-password?token=${token}`;
+
+    if (process.env.SENDGRID_API_KEY) {
+      const msg = {
+        to: recipientEmail,
+        from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+        subject: 'Password Reset Request - Proassisting',
+        html: `<h2>Password Reset</h2>
+          <p>Hello <strong>${escapeHtml(user.fullname)}</strong>,</p>
+          <p>We received a request to reset your password. Click the link below to set a new password:</p>
+          <p><a href="${resetLink}" style="display:inline-block;padding:12px 24px;background:#5a67d8;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Reset Password</a></p>
+          <p style="margin-top:16px;color:#666;font-size:13px">This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
+      };
+      await sgMail.send(msg);
+      console.log(`✅ Password reset email sent to ${recipientEmail} for user "${username}"`);
+    }
+
+    logAudit('PASSWORD_RESET_REQUESTED', username, { userId: user.id });
+    res.json({ success: true, message: 'If your account exists and is eligible, a reset link has been sent to your email.' });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Reset Password (via token from email) ---
+app.post('/api/reset-password', loginLimiter, async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Token and new password are required.' });
+
+  const pwErrors = validatePassword(password);
+  if (pwErrors.length > 0) return res.status(400).json({ error: pwErrors.join(' ') });
+
+  try {
+    const result = await pool.query(
+      'SELECT id, username FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
+      [token]
+    );
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+    }
+
+    const user = result.rows[0];
+    const hashed = await bcrypt.hash(password, 10);
+    await pool.query(
+      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL, failed_login_attempts = 0, locked_until = NULL WHERE id = $2',
+      [hashed, user.id]
+    );
+
+    logAudit('PASSWORD_RESET', user.username, { userId: user.id });
+    res.json({ success: true, message: 'Password has been reset successfully. You can now log in.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

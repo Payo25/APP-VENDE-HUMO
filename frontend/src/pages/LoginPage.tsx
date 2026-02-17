@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/login`;
@@ -35,7 +35,8 @@ const LoginPage: React.FC = () => {
       });
       navigate('/dashboard');
     } else {
-      setError('Invalid credentials.');
+      const data = await res.json().catch(() => null);
+      setError(data?.error || 'Invalid credentials.');
     }
   };
 
@@ -117,6 +118,11 @@ const LoginPage: React.FC = () => {
         >
           Login
         </button>
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <Link to="/forgot-password" style={{ color: '#667eea', fontSize: 14, textDecoration: 'none' }}>
+            Forgot Password?
+          </Link>
+        </div>
       </form>
     </div>
   );

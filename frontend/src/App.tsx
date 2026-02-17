@@ -18,6 +18,8 @@ import HealthCentersPage from './pages/HealthCentersPage';
 import PhysiciansPage from './pages/PhysiciansPage';
 import RsaEmailsPage from './pages/RsaEmailsPage';
 import InvoicesPage from './pages/InvoicesPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -48,6 +50,8 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/dashboard"
             element={
