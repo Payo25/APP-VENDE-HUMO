@@ -108,7 +108,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/call-hours" element={<CallHoursPage />} />
+          <Route path="/call-hours" element={<ProtectedRoute><CallHoursPage /></ProtectedRoute>} />
           <Route
             path="/call-hours-personal"
             element={
@@ -133,8 +133,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/forms-report" element={<FormsReportPage />} />
-          <Route path="/health-centers" element={<HealthCentersPage />} />
+          <Route path="/forms-report" element={<ProtectedRoute><FormsReportPage /></ProtectedRoute>} />
+          <Route path="/health-centers" element={<ProtectedRoute><HealthCentersPage /></ProtectedRoute>} />
           <Route
             path="/physicians"
             element={

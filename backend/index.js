@@ -55,9 +55,30 @@ const app = express();
 // Trust proxy (required for rate limiting behind Azure App Service / IIS)
 app.set('trust proxy', 1);
 
+// ========== HTTPS REDIRECT (Azure App Service sends X-Forwarded-Proto) ==========
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] === 'http') {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
 // ========== SECURITY HEADERS (Helmet.js) ==========
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled so React SPA can load inline scripts/styles
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.blob.core.windows.net'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    }
+  },
   crossOriginEmbedderPolicy: false, // Allow embedded resources
 }));
 
@@ -72,8 +93,8 @@ app.use(cors({
     // Allow requests with no origin (same-origin, server-to-server, mobile apps)
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    // In development, allow localhost
-    if (origin.startsWith('http://localhost:')) return callback(null, true);
+    // In development only, allow localhost
+    if (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:')) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -443,13 +464,13 @@ async function uploadToBlob(file) {
     }
   });
   
-  // Generate SAS token for the blob (valid for 10 years)
+  // Generate SAS token for the blob (valid for 1 year)
   const sasToken = generateBlobSASQueryParameters({
     containerName: 'uploads',
     blobName: blobName,
     permissions: BlobSASPermissions.parse('r'), // read permission
     startsOn: new Date(),
-    expiresOn: new Date(new Date().valueOf() + 315360000000) // 10 years
+    expiresOn: new Date(new Date().valueOf() + 365 * 24 * 60 * 60 * 1000) // 1 year
   }, new StorageSharedKeyCredential(
     blobServiceClient.accountName,
     process.env.AZURE_STORAGE_CONNECTION.split('AccountKey=')[1].split(';')[0]
@@ -561,6 +582,7 @@ app.post('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Su
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
+    logAudit('FORM_CREATED', req.user.username, { formId: result.rows[0].id, patientName, healthCenterName });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating form:', err.message);
@@ -611,6 +633,7 @@ app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
       values
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    logAudit('FORM_UPDATED', req.user.username, { formId: req.params.id });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -620,6 +643,7 @@ app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
 app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM forms WHERE id = $1', [req.params.id]);
+    logAudit('FORM_DELETED', req.user.username, { formId: req.params.id });
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -644,9 +668,12 @@ app.get('/api/users', requireRole('Admin'), async (req, res) => {
   }
 });
 
+const VALID_ROLES = ['Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'];
+
 app.post('/api/users', requireRole('Admin'), async (req, res) => {
   const { username, role, password, actor, fullName } = req.body;
   if (!username || !role || !password || !fullName) return res.status(400).json({ error: 'Missing fields' });
+  if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
   const pwErrors = validatePassword(password);
   if (pwErrors.length > 0) return res.status(400).json({ error: pwErrors.join(' ') });
   try {
@@ -657,6 +684,7 @@ app.post('/api/users', requireRole('Admin'), async (req, res) => {
       'INSERT INTO users (username, role, password, fullName) VALUES ($1, $2, $3, $4) RETURNING id, username, role, fullName',
       [username, role, hashedPassword, fullName]
     );
+    logAudit('USER_CREATED', req.user.username, { newUserId: result.rows[0].id, username, role });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -665,15 +693,17 @@ app.post('/api/users', requireRole('Admin'), async (req, res) => {
 
 app.put('/api/users/:id', requireRole('Admin'), async (req, res) => {
   const { role, fullName, username, hourlyRate } = req.body;
+  if (role && !VALID_ROLES.includes(role)) return res.status(400).json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
   try {
     const result = await pool.query(
       'UPDATE users SET role = $1, fullname = $2, username = $3, hourly_rate = $4 WHERE id = $5 RETURNING id, username, role, fullname, hourly_rate',
       [role, fullName, username, hourlyRate || 3.00, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    logAudit('USER_UPDATED', req.user.username, { targetUserId: req.params.id, role, username });
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Error updating user:', err);
+    console.error('Error updating user:', err.message);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -728,9 +758,10 @@ app.delete('/api/users/:id', requireRole('Admin'), async (req, res) => {
     }
 
     await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    logAudit('USER_DELETED', req.user.username, { targetUserId: req.params.id });
     res.status(204).end();
   } catch (err) {
-    console.error('Error deleting user:', err);
+    console.error('Error deleting user:', err.message);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -917,7 +948,7 @@ app.post('/api/reset-password', loginLimiter, async (req, res) => {
 });
 
 // --- Call Hours Monthly Planner using PostgreSQL ---
-app.get('/api/call-hours', async (req, res) => {
+app.get('/api/call-hours', requireRole('Admin', 'Business Assistant', 'Team Leader', 'Scheduler', 'Registered Surgical Assistant'), async (req, res) => {
   const { month, year } = req.query;
   if (!month || !year) return res.status(400).json({ error: 'Missing params' });
   try {
@@ -1204,6 +1235,7 @@ app.post('/api/personal-schedules', requireRole('Scheduler', 'Business Assistant
       [userId, scheduleDate, hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '']
     );
     res.json(result.rows[0]);
+    logAudit('SCHEDULE_CREATED', req.user.username, { scheduleId: result.rows[0].id, userId, scheduleDate });
 
     // Send email notification to RSA (async, don't block response)
     sendScheduleEmailToRSA(userId, 'CREATED', {
@@ -1222,6 +1254,7 @@ app.put('/api/personal-schedules/:id', requireRole('Scheduler', 'Business Assist
       [hours || 0, minutes || 0, notes || '', physicianName || '', healthCenterName || '', startTime || '', endTime || '', req.params.id]
     );
     const updated = result.rows[0];
+    logAudit('SCHEDULE_UPDATED', req.user.username, { scheduleId: req.params.id });
     res.json(updated);
 
     // Send email notification to RSA (async, don't block response)
@@ -1238,6 +1271,7 @@ app.delete('/api/personal-schedules/:id', requireRole('Scheduler', 'Business Ass
     // Fetch schedule details before deleting (for email notification)
     const existing = await pool.query('SELECT * FROM personal_schedules WHERE id=$1', [req.params.id]);
     await pool.query('DELETE FROM personal_schedules WHERE id=$1', [req.params.id]);
+    logAudit('SCHEDULE_DELETED', req.user.username, { scheduleId: req.params.id });
     res.json({ success: true });
 
     // Send email notification to RSA (async, don't block response)
@@ -1369,6 +1403,7 @@ app.post('/api/invoices', requireRole('Business Assistant'), async (req, res) =>
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [invoiceNumber, invoiceDate, dueDate || null, healthCenterName, healthCenterAddress || '', JSON.stringify(lineItems || []), notes || '', subtotal || 0, total || 0, status || 'Pending', createdByUserId || null]
     );
+    logAudit('INVOICE_CREATED', req.user.username, { invoiceId: result.rows[0].id, invoiceNumber, healthCenterName });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1382,6 +1417,7 @@ app.put('/api/invoices/:id', requireRole('Business Assistant'), async (req, res)
       `UPDATE invoices SET invoice_number=$1, invoice_date=$2, due_date=$3, health_center_name=$4, health_center_address=$5, line_items=$6, notes=$7, subtotal=$8, total=$9, status=$10, lastmodified=CURRENT_TIMESTAMP WHERE id=$11 RETURNING *`,
       [invoiceNumber, invoiceDate, dueDate || null, healthCenterName, healthCenterAddress || '', JSON.stringify(lineItems || []), notes || '', subtotal || 0, total || 0, status || 'Pending', req.params.id]
     );
+    logAudit('INVOICE_UPDATED', req.user.username, { invoiceId: req.params.id, invoiceNumber });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1391,6 +1427,7 @@ app.put('/api/invoices/:id', requireRole('Business Assistant'), async (req, res)
 app.delete('/api/invoices/:id', requireRole('Business Assistant'), async (req, res) => {
   try {
     await pool.query('DELETE FROM invoices WHERE id=$1', [req.params.id]);
+    logAudit('INVOICE_DELETED', req.user.username, { invoiceId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
