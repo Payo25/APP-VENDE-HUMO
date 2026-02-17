@@ -773,14 +773,11 @@ function logAudit(action, actor, details) {
 // --- Login API ---
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
-  console.log('Login attempt:', username);
   if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
   try {
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    console.log('User query result:', result.rows.length, 'rows');
     const user = result.rows[0];
     if (!user) {
-      console.log('User not found:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -791,9 +788,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(423).json({ error: `Account is locked. Try again in ${minutesLeft} minute(s).` });
     }
 
-    console.log('User found, checking password...');
     const match = await bcrypt.compare(password, user.password);
-    console.log('Password match:', match);
 
     if (!match) {
       // Increment failed attempts
@@ -839,7 +834,7 @@ app.post('/api/forgot-password', loginLimiter, async (req, res) => {
 
     // Always return success to avoid user enumeration — but only actually send for allowed roles
     if (!user || (user.role !== 'Registered Surgical Assistant' && user.role !== 'Team Leader')) {
-      console.log(`Forgot password: user "${username}" not found or role not allowed`);
+      // User not found or role not allowed — return generic success to prevent enumeration
       return res.json({ success: true, message: 'If your account exists and is eligible, a reset link has been sent to your email.' });
     }
 
@@ -849,7 +844,7 @@ app.post('/api/forgot-password', loginLimiter, async (req, res) => {
       [user.fullname]
     );
     if (emailResult.rows.length === 0) {
-      console.log(`Forgot password: no email found for "${user.fullname}" in rsa_emails`);
+      // No email found for user in rsa_emails — return generic success
       return res.json({ success: true, message: 'If your account exists and is eligible, a reset link has been sent to your email.' });
     }
 
@@ -858,7 +853,9 @@ app.post('/api/forgot-password', loginLimiter, async (req, res) => {
     // Generate secure reset token (valid for 1 hour)
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
-    await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3', [token, expires, user.id]);
+    // H2 fix: Hash token before storing (user gets raw token in email, DB stores hash)
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3', [hashedToken, expires, user.id]);
 
     const appUrl = process.env.APP_URL || 'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net';
     const resetLink = `${appUrl}/reset-password?token=${token}`;
@@ -875,7 +872,6 @@ app.post('/api/forgot-password', loginLimiter, async (req, res) => {
           <p style="margin-top:16px;color:#666;font-size:13px">This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
       };
       await sgMail.send(msg);
-      console.log(`✅ Password reset email sent to ${recipientEmail} for user "${username}"`);
     }
 
     logAudit('PASSWORD_RESET_REQUESTED', username, { userId: user.id });
@@ -895,9 +891,11 @@ app.post('/api/reset-password', loginLimiter, async (req, res) => {
   if (pwErrors.length > 0) return res.status(400).json({ error: pwErrors.join(' ') });
 
   try {
+    // H2 fix: Hash incoming token to match stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const result = await pool.query(
       'SELECT id, username FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
-      [token]
+      [hashedToken]
     );
     if (result.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
@@ -1176,7 +1174,11 @@ async function sendScheduleEmailToRSA(userId, action, details) {
 
 // ========== PERSONAL SCHEDULES ENDPOINTS ==========
 app.get('/api/personal-schedules', requireRole('Scheduler', 'Business Assistant', 'Team Leader', 'Registered Surgical Assistant'), async (req, res) => {
-  const { userId, month, year } = req.query;
+  let { userId, month, year } = req.query;
+  // H1 fix: RSAs can only view their own schedule
+  if (req.user.role === 'Registered Surgical Assistant') {
+    userId = req.user.id;
+  }
   try {
     const result = await pool.query(
       `SELECT * FROM personal_schedules 
@@ -1412,7 +1414,18 @@ app.put('/api/invoices/:id/status', requireRole('Business Assistant'), async (re
 });
 
 // Send invoice via email (with optional file attachment)
-const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const ALLOWED_INVOICE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'];
+const invoiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_INVOICE_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and image files (JPEG, PNG, GIF) are allowed as attachments.'));
+    }
+  }
+});
 app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invoiceUpload.single('attachment'), async (req, res) => {
   const { recipientEmail } = req.body;
   if (!recipientEmail) return res.status(400).json({ error: 'Recipient email is required' });
