@@ -651,16 +651,17 @@ app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registe
 });
 
 // --- Users API using PostgreSQL ---
-app.get('/api/users', requireRole('Admin'), async (req, res) => {
+app.get('/api/users', requireRole('Admin', 'Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, username, role, fullname, hourly_rate FROM users ORDER BY id DESC');
-    // Map fullname to fullName for frontend compatibility and remove raw fullname
+    // Non-Admin roles get limited fields (no username/email or hourly rate)
+    const isAdmin = req.user.role === 'Admin';
     const users = result.rows.map(user => ({
       id: user.id,
-      username: user.username,
+      username: isAdmin ? user.username : undefined,
       role: user.role,
       fullName: user.fullname,
-      hourlyRate: user.hourly_rate || 3.00
+      hourlyRate: isAdmin ? (user.hourly_rate || 3.00) : undefined,
     }));
     res.json(users);
   } catch (err) {

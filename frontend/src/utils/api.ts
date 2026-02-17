@@ -19,7 +19,8 @@ export function authFetch(url: string, options: RequestInit = {}): Promise<Respo
     headers,
   }).then(res => {
     // If token expired or invalid, redirect to login
-    if (res.status === 401 || res.status === 403) {
+    // Only on 401 (unauthorized) — 403 means valid token but insufficient role
+    if (res.status === 401) {
       // Only redirect if we're not already on the login page
       if (window.location.pathname !== '/') {
         localStorage.clear();
