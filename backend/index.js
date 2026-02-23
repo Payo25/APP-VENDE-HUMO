@@ -147,7 +147,8 @@ function authenticateToken(req, res, next) {
     req.user = decoded; // { id, username, role }
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token.' });
+    // Expired/invalid tokens are authentication failures (401), not authorization failures (403)
+    return res.status(401).json({ error: 'Invalid or expired token.' });
   }
 }
 
@@ -654,14 +655,16 @@ app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registe
 app.get('/api/users', requireRole('Admin', 'Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, username, role, fullname, hourly_rate FROM users ORDER BY id DESC');
-    // Non-Admin roles get limited fields (no username/email or hourly rate)
+    // Non-Admin roles get limited fields (no username/email)
+    // BA gets hourlyRate for payroll calculations
     const isAdmin = req.user.role === 'Admin';
+    const isBA = req.user.role === 'Business Assistant';
     const users = result.rows.map(user => ({
       id: user.id,
       username: isAdmin ? user.username : undefined,
       role: user.role,
       fullName: user.fullname,
-      hourlyRate: isAdmin ? (user.hourly_rate || 3.00) : undefined,
+      hourlyRate: (isAdmin || isBA) ? (user.hourly_rate || 3.00) : undefined,
     }));
     res.json(users);
   } catch (err) {

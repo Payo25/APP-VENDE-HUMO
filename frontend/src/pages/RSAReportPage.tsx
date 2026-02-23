@@ -32,8 +32,14 @@ const PayrollPage: React.FC = () => {
     
     // Fetch users and forms first
     Promise.all([
-      authFetch(USERS_API_URL).then(res => res.json()),
-      authFetch(FORMS_API_URL).then(res => res.json())
+      authFetch(USERS_API_URL).then(res => {
+        if (!res.ok) throw new Error('Failed to fetch users');
+        return res.json();
+      }),
+      authFetch(FORMS_API_URL).then(res => {
+        if (!res.ok) throw new Error('Failed to fetch forms');
+        return res.json();
+      })
     ]).then(([usersData, formsData]) => {
       setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
       setForms(formsData);
@@ -66,7 +72,10 @@ const PayrollPage: React.FC = () => {
     const callHoursPromises = Array.from(monthsToFetch).map(key => {
       const [year, month] = key.split('-');
       return authFetch(`${CALL_HOURS_API_URL}?month=${month}&year=${year}`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch call hours for ${month}/${year}`);
+          return res.json();
+        })
         .catch(() => ({}));
     });
     

@@ -56,7 +56,10 @@ const CallHoursPage: React.FC = () => {
     setSuccess('');
     setError('');
     authFetch(`${API_URL}?month=${month}&year=${year}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch call hours');
+        return res.json();
+      })
       .then(data => {
         const hasData = Object.keys(data).length > 0;
         setAssignments(data);
