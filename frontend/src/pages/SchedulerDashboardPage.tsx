@@ -4,8 +4,11 @@ import { authFetch } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const SCHEDULES_CALENDAR_URL = `${API_BASE_URL}/personal-schedules/calendar`;
+const PERSONAL_SCHEDULES_URL = `${API_BASE_URL}/personal-schedules`;
 const USERS_URL = `${API_BASE_URL}/users`;
 const CALL_HOURS_URL = `${API_BASE_URL}/call-hours`;
+const PHYSICIANS_URL = `${API_BASE_URL}/physicians`;
+const HEALTH_CENTERS_URL = `${API_BASE_URL}/health-centers`;
 
 // ─── Color palettes ────────────────────────────────────────────
 // RSA colors (saturated, opaque backgrounds)
@@ -57,6 +60,24 @@ interface User {
   id: number;
   fullName: string;
   role: string;
+}
+
+interface Physician {
+  id: number;
+  name: string;
+  specialty: string;
+}
+
+interface HealthCenter {
+  id: number;
+  name: string;
+  address: string;
+}
+
+interface EditModal {
+  date: string;       // YYYY-MM-DD
+  hour: number;       // clicked hour (6-23)
+  entry?: ScheduleEntry; // if editing existing
 }
 
 type ViewMode = 'day' | 'week';
@@ -130,6 +151,22 @@ const SchedulerDashboardPage: React.FC = () => {
   const [selectedDoctors, setSelectedDoctors] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
 
+  // Modal state for create/edit
+  const [physicians, setPhysicians] = useState<Physician[]>([]);
+  const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
+  const [editModal, setEditModal] = useState<EditModal | null>(null);
+  const [tempUserId, setTempUserId] = useState<number | ''>('');
+  const [tempStartTime, setTempStartTime] = useState('07:00');
+  const [tempEndTime, setTempEndTime] = useState('15:00');
+  const [tempHours, setTempHours] = useState(8);
+  const [tempMinutes, setTempMinutes] = useState(0);
+  const [tempPhysician, setTempPhysician] = useState('');
+  const [tempHealthCenter, setTempHealthCenter] = useState('');
+  const [tempNotes, setTempNotes] = useState('');
+  const [modalSaving, setModalSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [modalSuccess, setModalSuccess] = useState('');
+
   // Computed date range for current view
   const { startDate, endDate, viewDates } = useMemo(() => {
     if (viewMode === 'day') {
@@ -142,7 +179,7 @@ const SchedulerDashboardPage: React.FC = () => {
     return { startDate: mon, endDate: sun, viewDates: dates };
   }, [viewMode, currentDate]);
 
-  // Fetch users
+  // Fetch users, physicians, health centers
   useEffect(() => {
     authFetch(USERS_URL)
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
@@ -153,6 +190,16 @@ const SchedulerDashboardPage: React.FC = () => {
         setSelectedRSAs(new Set(rsas.map((u: User) => u.id)));
       })
       .catch(() => setError('Failed to load users'));
+
+    authFetch(PHYSICIANS_URL)
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(data => setPhysicians(data))
+      .catch(() => {});
+
+    authFetch(HEALTH_CENTERS_URL)
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(data => setHealthCenters(data))
+      .catch(() => {});
   }, []);
 
   // Fetch schedules for date range
@@ -254,6 +301,134 @@ const SchedulerDashboardPage: React.FC = () => {
   const selectAllDoctors = () => setSelectedDoctors(new Set(allDoctors));
   const deselectAllDoctors = () => setSelectedDoctors(new Set());
 
+  // ─── Modal open/close ────────────────────────────────────
+  const openCreateModal = (date: string, hour: number) => {
+    const startH = pad2(hour);
+    const endH = pad2(Math.min(hour + 8, 23));
+    setEditModal({ date, hour });
+    setTempUserId('');
+    setTempStartTime(`${startH}:00`);
+    setTempEndTime(`${endH}:00`);
+    setTempHours(8);
+    setTempMinutes(0);
+    setTempPhysician('');
+    setTempHealthCenter('');
+    setTempNotes('');
+    setModalError('');
+    setModalSuccess('');
+  };
+
+  const openEditEntryModal = (entry: ScheduleEntry) => {
+    const dateKey = entry.schedule_date?.split('T')[0] || '';
+    setEditModal({ date: dateKey, hour: 0, entry });
+    setTempUserId(entry.user_id);
+    setTempStartTime(entry.start_time || '07:00');
+    setTempEndTime(entry.end_time || '15:00');
+    setTempHours(entry.hours || 8);
+    setTempMinutes(entry.minutes || 0);
+    setTempPhysician(entry.physician_name || '');
+    setTempHealthCenter(entry.health_center_name || '');
+    setTempNotes(entry.notes || '');
+    setModalError('');
+    setModalSuccess('');
+  };
+
+  const closeModal = () => {
+    setEditModal(null);
+    setModalError('');
+    setModalSuccess('');
+  };
+
+  // ─── CRUD handlers ──────────────────────────────────────
+  const handleSave = async () => {
+    if (!editModal) return;
+    if (!editModal.entry && !tempUserId) {
+      setModalError('Please select an RSA');
+      return;
+    }
+    setModalSaving(true);
+    setModalError('');
+    setModalSuccess('');
+
+    try {
+      let res;
+      if (editModal.entry) {
+        // Edit existing
+        res = await authFetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hours: tempHours,
+            minutes: tempMinutes,
+            notes: tempNotes,
+            physicianName: tempPhysician,
+            healthCenterName: tempHealthCenter,
+            startTime: tempStartTime,
+            endTime: tempEndTime
+          })
+        });
+      } else {
+        // Create new
+        res = await authFetch(PERSONAL_SCHEDULES_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: tempUserId,
+            scheduleDate: editModal.date,
+            hours: tempHours,
+            minutes: tempMinutes,
+            notes: tempNotes,
+            physicianName: tempPhysician,
+            healthCenterName: tempHealthCenter,
+            startTime: tempStartTime,
+            endTime: tempEndTime
+          })
+        });
+      }
+      if (res.ok) {
+        setModalSuccess(editModal.entry ? 'Updated!' : 'Created!');
+        setTimeout(() => { closeModal(); fetchSchedules(); }, 600);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setModalError(data.error || 'Failed to save');
+      }
+    } catch {
+      setModalError('Network error');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  const handleDeleteEntry = async () => {
+    if (!editModal?.entry) return;
+    if (!window.confirm('Remove this schedule entry?')) return;
+    setModalSaving(true);
+    try {
+      const res = await authFetch(`${PERSONAL_SCHEDULES_URL}/${editModal.entry.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        closeModal();
+        fetchSchedules();
+      } else {
+        setModalError('Failed to delete');
+      }
+    } catch {
+      setModalError('Network error');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  // Auto-calculate hours from time range
+  const recalcHours = (start: string, end: string) => {
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+    if (endMin > startMin) {
+      const diff = endMin - startMin;
+      setTempHours(Math.floor(diff / 60));
+      setTempMinutes(diff % 60);
+    }
+  };
+
   // Access control
   if (userRole !== 'Scheduler' && userRole !== 'Business Assistant' && userRole !== 'Team Leader' && userRole !== 'Admin') {
     return (
@@ -341,7 +516,13 @@ const SchedulerDashboardPage: React.FC = () => {
             <div key={hour} style={{
               height: 60, borderBottom: '1px solid #f0f0f0',
               boxSizing: 'border-box',
-            }} />
+              cursor: 'pointer',
+            }}
+            onClick={() => openCreateModal(dateKey, hour)}
+            title={`Click to add schedule at ${formatHour(hour)}`}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#f0f4ff'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+            />
           ))}
 
           {/* Schedule blocks */}
@@ -386,7 +567,7 @@ const SchedulerDashboardPage: React.FC = () => {
                   zIndex: 2,
                   lineHeight: '13px',
                 }}
-                onClick={() => navigate(`/manage-user-schedule`)}
+                onClick={(e) => { e.stopPropagation(); openEditEntryModal(sched); }}
               >
                 <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {sched.rsa_name || 'RSA'}
@@ -599,6 +780,148 @@ const SchedulerDashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ─── Create/Edit Schedule Modal ──────────────────────── */}
+      {editModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 200,
+        }} onClick={closeModal}>
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: '24px 28px', width: '95%', maxWidth: 480,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, color: '#2d3a4b' }}>
+              {editModal.entry ? '✏️ Edit Schedule' : '➕ New Schedule'}
+            </h3>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+              📅 {editModal.date}
+              {!editModal.entry && ` · ${formatHour(editModal.hour)}`}
+            </div>
+
+            {/* RSA Select (only for new) */}
+            {!editModal.entry && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={modalLabelStyle}>RSA / Team Leader *</label>
+                <select value={tempUserId} onChange={e => setTempUserId(Number(e.target.value) || '')}
+                  style={modalInputStyle}>
+                  <option value="">-- Select RSA --</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.fullName} {u.role === 'Team Leader' ? '(TL)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* RSA display (for edit) */}
+            {editModal.entry && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={modalLabelStyle}>RSA</label>
+                <div style={{ padding: '8px 10px', background: '#f6f8fa', borderRadius: 6, fontSize: 14, fontWeight: 600 }}>
+                  {editModal.entry.rsa_name}
+                </div>
+              </div>
+            )}
+
+            {/* Start / End time row */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={modalLabelStyle}>Start Time</label>
+                <input type="time" value={tempStartTime}
+                  onChange={e => { setTempStartTime(e.target.value); recalcHours(e.target.value, tempEndTime); }}
+                  style={modalInputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={modalLabelStyle}>End Time</label>
+                <input type="time" value={tempEndTime}
+                  onChange={e => { setTempEndTime(e.target.value); recalcHours(tempStartTime, e.target.value); }}
+                  style={modalInputStyle} />
+              </div>
+            </div>
+
+            {/* Hours / Minutes row */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={modalLabelStyle}>Hours</label>
+                <input type="number" min={0} max={24} value={tempHours}
+                  onChange={e => setTempHours(Number(e.target.value))}
+                  style={modalInputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={modalLabelStyle}>Minutes</label>
+                <input type="number" min={0} max={59} value={tempMinutes}
+                  onChange={e => setTempMinutes(Number(e.target.value))}
+                  style={modalInputStyle} />
+              </div>
+            </div>
+
+            {/* Physician */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={modalLabelStyle}>Physician</label>
+              <select value={tempPhysician} onChange={e => setTempPhysician(e.target.value)}
+                style={modalInputStyle}>
+                <option value="">-- None --</option>
+                {physicians.map(p => (
+                  <option key={p.id} value={p.name}>{p.name}{p.specialty ? ` (${p.specialty})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Health Center */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={modalLabelStyle}>Health Center</label>
+              <select value={tempHealthCenter} onChange={e => setTempHealthCenter(e.target.value)}
+                style={modalInputStyle}>
+                <option value="">-- None --</option>
+                {healthCenters.map(hc => (
+                  <option key={hc.id} value={hc.name}>{hc.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={modalLabelStyle}>Notes</label>
+              <textarea value={tempNotes} onChange={e => setTempNotes(e.target.value)}
+                rows={2} style={{ ...modalInputStyle, resize: 'vertical' }} placeholder="Optional notes..." />
+            </div>
+
+            {/* Messages */}
+            {modalError && <div style={{ color: '#e74c3c', fontSize: 13, marginBottom: 10 }}>{modalError}</div>}
+            {modalSuccess && <div style={{ color: '#43cea2', fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{modalSuccess}</div>}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              {editModal.entry && (
+                <button onClick={handleDeleteEntry} disabled={modalSaving} style={{
+                  padding: '10px 18px', borderRadius: 6, border: '1px solid #e74c3c',
+                  background: '#fff', color: '#e74c3c', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                  marginRight: 'auto',
+                }}>
+                  🗑 Delete
+                </button>
+              )}
+              <button onClick={closeModal} disabled={modalSaving} style={{
+                padding: '10px 18px', borderRadius: 6, border: '1px solid #ccc',
+                background: '#fff', color: '#666', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={modalSaving} style={{
+                padding: '10px 24px', borderRadius: 6, border: 'none',
+                background: 'linear-gradient(90deg, #667eea 0%, #5a67d8 100%)',
+                color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                opacity: modalSaving ? 0.6 : 1,
+              }}>
+                {modalSaving ? 'Saving...' : editModal.entry ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -635,6 +958,23 @@ const filterActionBtn: React.CSSProperties = {
   background: '#f8f8f8',
   cursor: 'pointer',
   marginRight: 4,
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  display: 'block',
+  fontWeight: 600,
+  fontSize: 13,
+  marginBottom: 4,
+  color: '#444',
+};
+
+const modalInputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 10px',
+  fontSize: 14,
+  border: '2px solid #e5e7eb',
+  borderRadius: 6,
+  boxSizing: 'border-box',
 };
 
 export default SchedulerDashboardPage;
