@@ -199,6 +199,31 @@ const DashboardPage: React.FC = () => {
               Manage Physicians
             </a>
           )}
+          {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+            <a
+              href="/scheduler-calendar"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #7c4dff 0%, #651fff 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(124,77,255,0.08)',
+                transition: 'background 0.2s',
+                marginBottom: 12
+              }}
+              tabIndex={0}
+              aria-label="Scheduler Calendar"
+            >
+              📅 Scheduler Calendar
+            </a>
+          )}
           {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant') && (
             <a
               href="/rsa-emails"

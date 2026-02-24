@@ -1208,6 +1208,26 @@ async function sendScheduleEmailToRSA(userId, action, details) {
 }
 
 // ========== PERSONAL SCHEDULES ENDPOINTS ==========
+
+// Calendar view: get all schedules for all RSAs in a date range
+app.get('/api/personal-schedules/calendar', requireRole('Scheduler', 'Business Assistant', 'Team Leader'), async (req, res) => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) return res.status(400).json({ error: 'Missing startDate or endDate' });
+  try {
+    const result = await pool.query(
+      `SELECT ps.*, u.fullname AS rsa_name, u.role AS rsa_role
+       FROM personal_schedules ps
+       LEFT JOIN users u ON ps.user_id = u.id
+       WHERE ps.schedule_date >= $1 AND ps.schedule_date <= $2
+       ORDER BY ps.schedule_date, ps.start_time, ps.id`,
+      [startDate, endDate]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.get('/api/personal-schedules', requireRole('Scheduler', 'Business Assistant', 'Team Leader', 'Registered Surgical Assistant'), async (req, res) => {
   let { userId, month, year } = req.query;
   // H1 fix: RSAs can only view their own schedule

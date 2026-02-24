@@ -20,6 +20,7 @@ import RsaEmailsPage from './pages/RsaEmailsPage';
 import InvoicesPage from './pages/InvoicesPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import SchedulerDashboardPage from './pages/SchedulerDashboardPage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -156,6 +157,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <InvoicesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/scheduler-calendar"
+            element={
+              <ProtectedRoute>
+                <SchedulerDashboardPage />
               </ProtectedRoute>
             }
           />
