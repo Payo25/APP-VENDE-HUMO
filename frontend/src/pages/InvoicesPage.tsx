@@ -324,9 +324,12 @@ const InvoicesPage: React.FC = () => {
         {showEmailModal && (
           <div style={{ background: '#f5f7ff', padding: 20, borderRadius: 10, marginBottom: 16, border: '1px solid #d0d5dd' }}>
             <h3 style={{ margin: '0 0 12px', color: '#1a237e' }}>Send Invoice #{viewInvoice.invoiceNumber} via Email</h3>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontWeight: 600, fontSize: 13, color: '#555', display: 'block', marginBottom: 4 }}>Recipients (separate multiple emails with commas)</label>
+              <textarea value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="email1@example.com, email2@example.com" rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+            </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Recipient email address" style={{ flex: 1, minWidth: 200, padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15 }} />
-              <button onClick={handleSendEmail} disabled={sending || !recipientEmail.trim()} style={{ padding: '10px 20px', background: sending ? '#ccc' : 'linear-gradient(90deg, #e91e63 0%, #c2185b 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: sending ? 'default' : 'pointer' }}>{sending ? 'Sending...' : 'Send'}</button>
+              <button onClick={handleSendEmail} disabled={sending || !recipientEmail.trim()} style={{ padding: '10px 20px', background: sending ? '#ccc' : 'linear-gradient(90deg, #e91e63 0%, #c2185b 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: sending ? 'default' : 'pointer' }}>{sending ? 'Sending...' : `Send to ${recipientEmail.split(',').filter(e => e.trim()).length} recipient(s)`}</button>
               <button onClick={() => { setShowEmailModal(false); setRecipientEmail(''); setAttachmentFile(null); }} style={{ padding: '10px 20px', background: '#757575', color: '#fff', border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -344,7 +347,7 @@ const InvoicesPage: React.FC = () => {
               <p style={{ margin: '4px 0', color: '#555', fontSize: 14 }}>18761 Chestnut Ct</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>Mokena, IL 60448</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>(786) 448-9020</p>
-              <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>info@proassisting.net</p>
+              <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>Adminoffice@proassisting.net</p>
             </div>
             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <img src={process.env.PUBLIC_URL + '/logo.jpg'} alt="ProAssisting Logo" style={{ height: 80, marginBottom: 10 }} />
@@ -409,17 +412,9 @@ const InvoicesPage: React.FC = () => {
             </tbody>
           </table>
 
-          {/* Notes + Totals */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              {viewInvoice.notes && (
-                <div style={{ background: '#f5f7ff', padding: '12px 16px', borderRadius: 8 }}>
-                  <p style={{ margin: 0, fontWeight: 700, color: '#1a237e', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Notes</p>
-                  <p style={{ margin: 0, fontSize: 14, color: '#555', whiteSpace: 'pre-line' }}>{viewInvoice.notes}</p>
-                </div>
-              )}
-            </div>
-            <div style={{ minWidth: 200 }}>
+          {/* Totals */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+            <div style={{ minWidth: 240 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e0e0e0' }}>
                 <span style={{ fontWeight: 600, color: '#555' }}>Subtotal:</span>
                 <span style={{ fontWeight: 600 }}>{formatCurrency(viewInvoice.subtotal)}</span>
@@ -430,6 +425,20 @@ const InvoicesPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Notes below total */}
+          {viewInvoice.notes && (
+            <div style={{ background: '#f5f7ff', padding: '12px 16px', borderRadius: 8 }}>
+              <p style={{ margin: 0, fontWeight: 700, color: '#1a237e', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Notes</p>
+              <p style={{ margin: 0, fontSize: 14, color: '#555', whiteSpace: 'pre-line' }}>{viewInvoice.notes}</p>
+            </div>
+          )}
+
+          {/* Footer with email */}
+          <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid #e0e0e0' }} />
+          <p style={{ textAlign: 'center', color: '#999', fontSize: 12, margin: 0 }}>
+            This invoice was generated by Proassisting Inc. — Adminoffice@proassisting.net
+          </p>
         </div>
       </div>
     );
