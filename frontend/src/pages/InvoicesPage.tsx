@@ -347,6 +347,7 @@ const InvoicesPage: React.FC = () => {
               <p style={{ margin: '4px 0', color: '#555', fontSize: 14 }}>18761 Chestnut Ct</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>Mokena, IL 60448</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>(786) 448-9020</p>
+              <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>Fax: 708.995.1874</p>
               <p style={{ margin: '2px 0', color: '#555', fontSize: 14 }}>Adminoffice@proassisting.net</p>
             </div>
             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>

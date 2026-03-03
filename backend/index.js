@@ -1525,6 +1525,7 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
           <p style="margin:4px 0;color:#555;font-size:13px">18761 Chestnut Ct</p>
           <p style="margin:2px 0;color:#555;font-size:13px">Mokena, IL 60448</p>
           <p style="margin:2px 0;color:#555;font-size:13px">(786) 448-9020</p>
+          <p style="margin:2px 0;color:#555;font-size:13px">Fax: 708.995.1874</p>
           <p style="margin:2px 0;color:#555;font-size:13px">Adminoffice@proassisting.net</p>
         </div>
         <div style="text-align:right">
