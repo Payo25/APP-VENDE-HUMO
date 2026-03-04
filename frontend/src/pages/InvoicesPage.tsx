@@ -62,8 +62,6 @@ const InvoicesPage: React.FC = () => {
   // View state
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
 
-  // Users for RSA name mapping
-  const [allUsers, setAllUsers] = useState<{id: number, fullName: string, role: string, hourlyRate?: number}[]>([]);
   const [loadingCallHours, setLoadingCallHours] = useState(false);
 
   // Filter state
@@ -83,7 +81,6 @@ const InvoicesPage: React.FC = () => {
     }
     fetchInvoices();
     fetchHealthCenters();
-    fetchAllUsers();
   }, [userRole, navigate]);
 
   const fetchInvoices = async () => {
@@ -106,13 +103,6 @@ const InvoicesPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
-  const fetchAllUsers = async () => {
-    try {
-      const res = await authFetch(`${API_BASE_URL}/users`);
-      const data = await res.json();
-      setAllUsers(data);
-    } catch { /* ignore */ }
-  };
 
   const fetchNextNumber = async () => {
     try {
@@ -168,7 +158,7 @@ const InvoicesPage: React.FC = () => {
       return;
     }
 
-    // Fetch on-call hours for the invoice date month and populate notes + line items with charges
+    // Fetch on-call hours for the invoice date month and populate notes + line items
     try {
       setLoadingCallHours(true);
       const dateForMonth = invoiceDate || new Date().toISOString().split('T')[0];
@@ -177,8 +167,9 @@ const InvoicesPage: React.FC = () => {
       if (!res.ok) throw new Error();
       const callAssignments = await res.json();
 
-      // Aggregate hours per RSA for this health center
-      const rsaTotals: { [rsaId: string]: { name: string, hours: number, minutes: number, hourlyRate: number, entries: string[] } } = {};
+      // Aggregate total hours per date for this health center
+      const dateTotals: { [dateKey: string]: number } = {};
+      let grandTotalHours = 0;
 
       const sortedDates = Object.keys(callAssignments).sort();
       for (const dateKey of sortedDates) {
@@ -186,62 +177,35 @@ const InvoicesPage: React.FC = () => {
         if (!Array.isArray(dayEntries)) continue;
         for (const entry of dayEntries) {
           if (entry.healthCenter !== name) continue;
-          const user = allUsers.find(u => String(u.id) === String(entry.id));
-          const rsaName = user?.fullName || `RSA #${entry.id}`;
-          const hourlyRate = user?.hourlyRate || 3.00;
-          const shiftType = entry.shift === 'F' ? 'Full Call' : 'Half Call';
           const h = entry.hours ?? (entry.shift === 'F' ? 24 : 12);
           const min = entry.minutes ?? 0;
-
-          if (!rsaTotals[entry.id]) {
-            rsaTotals[entry.id] = { name: rsaName, hours: 0, minutes: 0, hourlyRate, entries: [] };
-          }
-          rsaTotals[entry.id].hours += h;
-          rsaTotals[entry.id].minutes += min;
-          const [ey, em, ed] = dateKey.split('-');
-          rsaTotals[entry.id].entries.push(`${em}/${ed}/${ey}: ${shiftType} (${h}h ${min}m)`);
+          const decimalH = h + min / 60;
+          if (!dateTotals[dateKey]) dateTotals[dateKey] = 0;
+          dateTotals[dateKey] += decimalH;
+          grandTotalHours += decimalH;
         }
       }
 
-      const rsaIds = Object.keys(rsaTotals);
-      if (rsaIds.length > 0) {
-        // Build line items — one per RSA with total hours as qty and hourly rate as unit price
-        const newLineItems: LineItem[] = rsaIds.map(rsaId => {
-          const rsa = rsaTotals[rsaId];
-          const totalH = rsa.hours + Math.floor(rsa.minutes / 60);
-          const totalM = rsa.minutes % 60;
-          const totalDecimalHours = Number((totalH + totalM / 60).toFixed(2));
-          const totalPrice = Number((totalDecimalHours * rsa.hourlyRate).toFixed(2));
-          return {
-            description: `On-Call Hours — ${rsa.name}`,
-            qty: totalDecimalHours,
-            unitPrice: rsa.hourlyRate,
-            totalPrice
-          };
-        });
-        setLineItems(newLineItems);
+      const dateKeys = Object.keys(dateTotals).sort();
+      if (dateKeys.length > 0) {
+        // Single line item: "On call hours" with total hours as qty
+        const totalQty = Number(grandTotalHours.toFixed(2));
+        setLineItems([{
+          description: 'On call hours',
+          qty: totalQty,
+          unitPrice: 0,
+          totalPrice: 0
+        }]);
 
-        // Build notes with detailed breakdown
-        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const noteLines: string[] = [`On-Call Hours for ${monthNames[m - 1]} ${y} at ${name}:`];
-        let grandTotalH = 0;
-        let grandTotalM = 0;
-        for (const rsaId of rsaIds) {
-          const rsa = rsaTotals[rsaId];
-          const totalH = rsa.hours + Math.floor(rsa.minutes / 60);
-          const totalM = rsa.minutes % 60;
-          grandTotalH += totalH;
-          grandTotalM += totalM;
-          noteLines.push(``);
-          noteLines.push(`${rsa.name} (@$${rsa.hourlyRate.toFixed(2)}/hr):`);
-          rsa.entries.forEach(e => noteLines.push(`  ${e}`));
-          noteLines.push(`  Subtotal: ${totalH}h ${totalM}m`);
-        }
-        grandTotalH += Math.floor(grandTotalM / 60);
-        grandTotalM = grandTotalM % 60;
-        noteLines.push(``);
-        noteLines.push(`Grand Total: ${grandTotalH}h ${grandTotalM}m`);
-        setNotes(noteLines.join('\n'));
+        // Notes: compact date*hours format like 02/01*24H, 02/02*16H, ...
+        const mm = m.toString().padStart(2, '0');
+        const dateHourParts = dateKeys.map(dk => {
+          const day = dk.split('-')[2];
+          const hrs = dateTotals[dk];
+          const hrsDisplay = Number.isInteger(hrs) ? hrs.toString() : hrs.toFixed(1);
+          return `${mm}/${day}*${hrsDisplay}H`;
+        });
+        setNotes(`On call hours:\n${dateHourParts.join(', ')}`);
       } else {
         setLineItems([{ ...emptyLine }]);
         setNotes('');
