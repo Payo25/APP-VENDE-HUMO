@@ -62,6 +62,10 @@ const InvoicesPage: React.FC = () => {
   // View state
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
 
+  // Users for RSA name mapping
+  const [allUsers, setAllUsers] = useState<{id: number, fullName: string, role: string}[]>([]);
+  const [loadingCallHours, setLoadingCallHours] = useState(false);
+
   // Filter state
   const [filterStatus, setFilterStatus] = useState('');
   const [filterHealthCenter, setFilterHealthCenter] = useState('');
@@ -79,6 +83,7 @@ const InvoicesPage: React.FC = () => {
     }
     fetchInvoices();
     fetchHealthCenters();
+    fetchAllUsers();
   }, [userRole, navigate]);
 
   const fetchInvoices = async () => {
@@ -98,6 +103,14 @@ const InvoicesPage: React.FC = () => {
       const res = await authFetch(`${API_BASE_URL}/health-centers`);
       const data = await res.json();
       setHealthCenters(data);
+    } catch { /* ignore */ }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const res = await authFetch(`${API_BASE_URL}/users`);
+      const data = await res.json();
+      setAllUsers(data);
     } catch { /* ignore */ }
   };
 
@@ -144,10 +157,61 @@ const InvoicesPage: React.FC = () => {
     setActiveTab('view');
   };
 
-  const handleHealthCenterSelect = (name: string) => {
+  const handleHealthCenterSelect = async (name: string) => {
     setHealthCenterName(name);
     const hc = healthCenters.find(h => h.name === name);
     setHealthCenterAddress(hc?.address || '');
+
+    if (!name) return;
+
+    // Fetch on-call hours for the invoice date month and populate notes
+    try {
+      setLoadingCallHours(true);
+      const dateForMonth = invoiceDate || new Date().toISOString().split('T')[0];
+      const [y, m] = dateForMonth.split('-').map(Number);
+      const res = await authFetch(`${API_BASE_URL}/call-hours?month=${m}&year=${y}`);
+      if (!res.ok) throw new Error();
+      const callAssignments = await res.json();
+
+      // Filter assignments matching this health center
+      const lines: string[] = [];
+      let totalHours = 0;
+      let totalMinutes = 0;
+
+      const sortedDates = Object.keys(callAssignments).sort();
+      for (const dateKey of sortedDates) {
+        const dayEntries = callAssignments[dateKey];
+        if (!Array.isArray(dayEntries)) continue;
+        for (const entry of dayEntries) {
+          if (entry.healthCenter !== name) continue;
+          const user = allUsers.find(u => String(u.id) === String(entry.id));
+          const rsaName = user?.fullName || `RSA #${entry.id}`;
+          const shiftType = entry.shift === 'F' ? 'Full Call' : 'Half Call';
+          const h = entry.hours ?? (entry.shift === 'F' ? 24 : 12);
+          const min = entry.minutes ?? 0;
+          totalHours += h;
+          totalMinutes += min;
+          const [ey, em, ed] = dateKey.split('-');
+          lines.push(`${em}/${ed}/${ey}: ${rsaName} — ${shiftType} (${h}h ${min}m)`);
+        }
+      }
+
+      // Handle overflow minutes
+      totalHours += Math.floor(totalMinutes / 60);
+      totalMinutes = totalMinutes % 60;
+
+      if (lines.length > 0) {
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const header = `On-Call Hours for ${monthNames[m - 1]} ${y} at ${name}:`;
+        const summary = `Total: ${totalHours}h ${totalMinutes}m`;
+        setNotes(`${header}\n${lines.join('\n')}\n${summary}`);
+      } else {
+        setNotes('');
+      }
+    } catch { /* ignore errors */ }
+    finally {
+      setLoadingCallHours(false);
+    }
   };
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -543,8 +607,8 @@ const InvoicesPage: React.FC = () => {
 
           {/* Notes */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Notes</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Additional notes..." style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical' }} />
+            <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Notes {loadingCallHours && <span style={{ color: '#667eea', fontSize: 12, fontWeight: 400 }}>(loading on-call hours...)</span>}</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={6} placeholder="Additional notes... (On-call hours auto-populate when you select a health center)" style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical' }} />
           </div>
 
           {/* Totals */}
