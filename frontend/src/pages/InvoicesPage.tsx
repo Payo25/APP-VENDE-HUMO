@@ -58,6 +58,8 @@ const InvoicesPage: React.FC = () => {
   const [lineItems, setLineItems] = useState<LineItem[]>([{ ...emptyLine }]);
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('Pending');
+  const [includeCallHours, setIncludeCallHours] = useState<'no' | 'yes'>('no');
+  const [allUsers, setAllUsers] = useState<{id: number, fullName: string, role: string, hourlyRate?: number}[]>([]);
 
   // View state
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
@@ -81,6 +83,7 @@ const InvoicesPage: React.FC = () => {
     }
     fetchInvoices();
     fetchHealthCenters();
+    fetchAllUsers();
   }, [userRole, navigate]);
 
   const fetchInvoices = async () => {
@@ -103,6 +106,14 @@ const InvoicesPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
+  const fetchAllUsers = async () => {
+    try {
+      const res = await authFetch(`${API_BASE_URL}/users`);
+      const data = await res.json();
+      setAllUsers(data);
+    } catch { /* ignore */ }
+  };
+
 
   const fetchNextNumber = async () => {
     try {
@@ -121,6 +132,7 @@ const InvoicesPage: React.FC = () => {
     setLineItems([{ ...emptyLine }]);
     setNotes('');
     setStatus('Pending');
+    setIncludeCallHours('no');
     fetchNextNumber();
   };
 
@@ -147,18 +159,29 @@ const InvoicesPage: React.FC = () => {
     setActiveTab('view');
   };
 
-  const handleHealthCenterSelect = async (name: string) => {
+  const handleHealthCenterSelect = (name: string) => {
     setHealthCenterName(name);
     const hc = healthCenters.find(h => h.name === name);
     setHealthCenterAddress(hc?.address || '');
-
-    if (!name) {
+    if (includeCallHours === 'yes' && name) {
+      fetchCallHoursData(name);
+    } else {
       setLineItems([{ ...emptyLine }]);
       setNotes('');
-      return;
     }
+  };
 
-    // Fetch on-call hours for the invoice date month and populate notes + line items
+  const handleIncludeCallHoursChange = (value: 'yes' | 'no') => {
+    setIncludeCallHours(value);
+    if (value === 'yes' && healthCenterName) {
+      fetchCallHoursData(healthCenterName);
+    } else if (value === 'no') {
+      setLineItems([{ ...emptyLine }]);
+      setNotes('');
+    }
+  };
+
+  const fetchCallHoursData = async (hcName: string) => {
     try {
       setLoadingCallHours(true);
       const dateForMonth = invoiceDate || new Date().toISOString().split('T')[0];
@@ -167,37 +190,40 @@ const InvoicesPage: React.FC = () => {
       if (!res.ok) throw new Error();
       const callAssignments = await res.json();
 
-      // Aggregate total hours per date for this health center
       const dateTotals: { [dateKey: string]: number } = {};
       let grandTotalHours = 0;
+      let unitPrice = 0;
 
       const sortedDates = Object.keys(callAssignments).sort();
       for (const dateKey of sortedDates) {
         const dayEntries = callAssignments[dateKey];
         if (!Array.isArray(dayEntries)) continue;
         for (const entry of dayEntries) {
-          if (entry.healthCenter !== name) continue;
+          if (entry.healthCenter !== hcName) continue;
           const h = entry.hours ?? (entry.shift === 'F' ? 24 : 12);
           const min = entry.minutes ?? 0;
           const decimalH = h + min / 60;
           if (!dateTotals[dateKey]) dateTotals[dateKey] = 0;
           dateTotals[dateKey] += decimalH;
           grandTotalHours += decimalH;
+          if (unitPrice === 0) {
+            const user = allUsers.find(u => String(u.id) === String(entry.id));
+            unitPrice = user?.hourlyRate || 3.00;
+          }
         }
       }
 
       const dateKeys = Object.keys(dateTotals).sort();
       if (dateKeys.length > 0) {
-        // Single line item: "On call hours" with total hours as qty
         const totalQty = Number(grandTotalHours.toFixed(2));
+        const totalPrice = Number((totalQty * unitPrice).toFixed(2));
         setLineItems([{
           description: 'On call hours',
           qty: totalQty,
-          unitPrice: 0,
-          totalPrice: 0
+          unitPrice: unitPrice,
+          totalPrice: totalPrice
         }]);
 
-        // Notes: compact date*hours format like 02/01*24H, 02/02*16H, ...
         const mm = m.toString().padStart(2, '0');
         const dateHourParts = dateKeys.map(dk => {
           const day = dk.split('-')[2];
@@ -563,6 +589,15 @@ const InvoicesPage: React.FC = () => {
             <textarea value={healthCenterAddress} onChange={e => setHealthCenterAddress(e.target.value)} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical' }} />
           </div>
 
+          {/* Include Call Hours Toggle */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Include On-Call Hours {loadingCallHours && <span style={{ color: '#667eea', fontSize: 12, fontWeight: 400 }}>(loading...)</span>}</label>
+            <select value={includeCallHours} onChange={e => handleIncludeCallHoursChange(e.target.value as 'yes' | 'no')} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box' }}>
+              <option value="no">No — Manual invoice</option>
+              <option value="yes">Yes — Auto-fill from call hours</option>
+            </select>
+          </div>
+
           {/* Line Items */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -609,8 +644,8 @@ const InvoicesPage: React.FC = () => {
 
           {/* Notes */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Notes {loadingCallHours && <span style={{ color: '#667eea', fontSize: 12, fontWeight: 400 }}>(loading on-call hours...)</span>}</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={6} placeholder="Additional notes... (On-call hours auto-populate when you select a health center)" style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical' }} />
+            <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={6} placeholder="Additional notes..." style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', resize: 'vertical' }} />
           </div>
 
           {/* Totals */}
