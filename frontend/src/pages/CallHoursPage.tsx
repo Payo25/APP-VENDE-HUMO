@@ -7,6 +7,7 @@ import { authFetch } from '../utils/api';
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/call-hours`;
 const USERS_API_URL = `${API_BASE_URL}/users`;
+const HEALTH_CENTERS_URL = `${API_BASE_URL}/health-centers`;
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -29,8 +30,9 @@ const CallHoursPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number }
-  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number }[] }>({});
+  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string }
+  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string }[] }>({});
+  const [healthCenters, setHealthCenters] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -48,6 +50,11 @@ const CallHoursPage: React.FC = () => {
     authFetch(USERS_API_URL)
       .then(res => res.json())
       .then(data => setUsers(data.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader')));
+    // Fetch health centers for on-call restriction
+    authFetch(HEALTH_CENTERS_URL)
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(data => setHealthCenters(data))
+      .catch(() => {});
   }, [userRole, userId]);
 
   // Fetch assignments for the month
@@ -85,7 +92,21 @@ const CallHoursPage: React.FC = () => {
       const prevList = prev[dateKey] || [];
       const rsaIdStr = String(rsaId);
       if (prevList.some((a: any) => a.id === rsaIdStr)) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours, minutes: 0 }] };
+      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '' }] };
+    });
+  };
+
+  const handleUpdateHealthCenter = (day: number, rsaId: string, healthCenter: string) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      const rsaIdStr = String(rsaId);
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) =>
+          a.id === rsaIdStr ? { ...a, healthCenter } : a
+        )
+      };
     });
   };
   
@@ -327,6 +348,25 @@ cells.push(
                                         </button>
                                       )}
                                     </div>
+                                    {/* Health Center */}
+                                    {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
+                                      <select
+                                        value={a.healthCenter || ''}
+                                        onChange={e => handleUpdateHealthCenter(thisDay, a.id, e.target.value)}
+                                        style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
+                                      >
+                                        <option value="">-- Health Center --</option>
+                                        {healthCenters.map(hc => (
+                                          <option key={hc.id} value={hc.name}>{hc.name}</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      a.healthCenter && (
+                                        <div style={{ fontSize: 11, color: '#1a237e', fontWeight: 600, marginTop: 2 }}>
+                                          🏥 {a.healthCenter}
+                                        </div>
+                                      )
+                                    )}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                       {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
                                         <>
