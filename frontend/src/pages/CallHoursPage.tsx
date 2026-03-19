@@ -90,9 +90,8 @@ const CallHoursPage: React.FC = () => {
     
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
-      if (prevList.some((a: any) => a.id === rsaIdStr)) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: rsaIdStr, shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', firstAssistant: '', secondAssistant: '' }] };
+      if (prevList.some((a: any) => String(a.id) === String(rsaId))) return prev;
+      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', firstAssistant: '', secondAssistant: '' }] };
     });
   };
 
@@ -100,11 +99,10 @@ const CallHoursPage: React.FC = () => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
       return {
         ...prev,
         [dateKey]: prevList.map((a: any) =>
-          a.id === rsaIdStr ? { ...a, healthCenter } : a
+          String(a.id) === String(rsaId) ? { ...a, healthCenter } : a
         )
       };
     });
@@ -114,11 +112,10 @@ const CallHoursPage: React.FC = () => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
       return {
         ...prev,
         [dateKey]: prevList.map((a: any) =>
-          a.id === rsaIdStr ? { ...a, [field]: value } : a
+          String(a.id) === String(rsaId) ? { ...a, [field]: value } : a
         )
       };
     });
@@ -128,11 +125,10 @@ const CallHoursPage: React.FC = () => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
       return {
         ...prev,
         [dateKey]: prevList.map((a: any) => 
-          a.id === rsaIdStr ? { ...a, hours } : a
+          String(a.id) === String(rsaId) ? { ...a, hours } : a
         )
       };
     });
@@ -142,11 +138,10 @@ const CallHoursPage: React.FC = () => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
       return {
         ...prev,
         [dateKey]: prevList.map((a: any) => 
-          a.id === rsaIdStr ? { ...a, hours, minutes } : a
+          String(a.id) === String(rsaId) ? { ...a, hours, minutes } : a
         )
       };
     });
@@ -169,8 +164,7 @@ const CallHoursPage: React.FC = () => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
-      const rsaIdStr = String(rsaId);
-      return { ...prev, [dateKey]: prevList.filter((a: any) => a.id !== rsaIdStr) };
+      return { ...prev, [dateKey]: prevList.filter((a: any) => String(a.id) !== String(rsaId)) };
     });
   };
 
@@ -328,7 +322,7 @@ cells.push(
                           <td key={d} style={{ padding: 8, minHeight: 80, border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{thisDay}</div>
                             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                              {(assignments[dateKey] || []).map((a: any) => {
+                              {(assignments[dateKey] || []).map((a: any, aIdx: number) => {
                                 const rsa = users.find(u => String(u.id) === String(a.id));
                                 if (!rsa) return null;
                                 return (
@@ -384,12 +378,13 @@ cells.push(
                                     {/* 1st Assistant */}
                                     {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
                                       <select
+                                        key={`1st-${a.id}-${thisDay}`}
                                         value={a.firstAssistant || ''}
                                         onChange={e => handleUpdateAssistant(thisDay, a.id, 'firstAssistant', e.target.value)}
                                         style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
                                       >
                                         <option value="">-- 1st Assistant --</option>
-                                        {users.map(u => (
+                                        {users.filter(u => String(u.id) !== String(a.id)).map(u => (
                                           <option key={u.id} value={u.fullName || u.username}>{u.fullName || u.username}</option>
                                         ))}
                                       </select>
@@ -403,12 +398,13 @@ cells.push(
                                     {/* 2nd Assistant */}
                                     {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
                                       <select
+                                        key={`2nd-${a.id}-${thisDay}`}
                                         value={a.secondAssistant || ''}
                                         onChange={e => handleUpdateAssistant(thisDay, a.id, 'secondAssistant', e.target.value)}
                                         style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
                                       >
                                         <option value="">-- 2nd Assistant --</option>
-                                        {users.map(u => (
+                                        {users.filter(u => String(u.id) !== String(a.id)).map(u => (
                                           <option key={u.id} value={u.fullName || u.username}>{u.fullName || u.username}</option>
                                         ))}
                                       </select>
@@ -473,7 +469,7 @@ cells.push(
                                 style={{ width: '100%', marginTop: 4 }}
                               >
                                 <option value="">+ Add RSA</option>
-                                {users.filter(u => !((assignments[dateKey] || []).some((a: any) => a.id === u.id))).map(u => (
+                                {users.filter(u => !((assignments[dateKey] || []).some((a: any) => String(a.id) === String(u.id)))).map(u => (
                                   <option key={u.id} value={u.id}>{u.fullName || u.username}</option>
                                 ))}
                               </select>
