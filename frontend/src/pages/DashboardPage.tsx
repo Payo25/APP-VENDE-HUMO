@@ -274,6 +274,31 @@ const DashboardPage: React.FC = () => {
               🧾 Invoices
             </a>
           )}
+          {(localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader' || localStorage.getItem('role') === 'Scheduler') && (
+            <a
+              href="/vacation-time"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #15803d 0%, #166534 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(21,128,61,0.08)',
+                transition: 'background 0.2s',
+                marginBottom: 12
+              }}
+              tabIndex={0}
+              aria-label="Manage Vacation Time"
+            >
+              🏖️ Vacation Time
+            </a>
+          )}
         </div>
         {(localStorage.getItem('role') === 'Registered Surgical Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <button

@@ -276,6 +276,20 @@ async function migrateDatabase() {
       );
     `);
 
+    // Create vacation_time table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vacation_time (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        vacation_date DATE NOT NULL,
+        hours DECIMAL(5,2) NOT NULL DEFAULT 8,
+        vacation_type VARCHAR(50) NOT NULL DEFAULT 'Vacation',
+        notes TEXT,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create invoices table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoices (
@@ -1597,6 +1611,79 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
     console.error('Error sending invoice email:', err.message || err);
     const detail = err.response?.body?.errors?.[0]?.message || err.message || 'Unknown error';
     res.status(500).json({ error: `Failed to send email: ${detail}` });
+  }
+});
+
+// ========== VACATION TIME CRUD ==========
+
+// GET all vacation entries (optionally filter by user_id, from/to dates)
+app.get('/api/vacation-time', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const { user_id, from, to } = req.query;
+    let query = `SELECT vt.*, u.fullname as user_name FROM vacation_time vt JOIN users u ON vt.user_id = u.id WHERE 1=1`;
+    const params = [];
+    if (user_id) {
+      params.push(user_id);
+      query += ` AND vt.user_id = $${params.length}`;
+    }
+    if (from) {
+      params.push(from);
+      query += ` AND vt.vacation_date >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      query += ` AND vt.vacation_date <= $${params.length}`;
+    }
+    query += ` ORDER BY vt.vacation_date DESC, vt.createdat DESC`;
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching vacation time:', err.message);
+    res.status(500).json({ error: 'Failed to fetch vacation time' });
+  }
+});
+
+// POST create vacation entry
+app.post('/api/vacation-time', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const { user_id, vacation_date, hours, vacation_type, notes } = req.body;
+    if (!user_id || !vacation_date) return res.status(400).json({ error: 'user_id and vacation_date are required' });
+    const result = await pool.query(
+      `INSERT INTO vacation_time (user_id, vacation_date, hours, vacation_type, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [user_id, vacation_date, hours || 8, vacation_type || 'Vacation', notes || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating vacation time:', err.message);
+    res.status(500).json({ error: 'Failed to create vacation time' });
+  }
+});
+
+// PUT update vacation entry
+app.put('/api/vacation-time/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const { user_id, vacation_date, hours, vacation_type, notes } = req.body;
+    const result = await pool.query(
+      `UPDATE vacation_time SET user_id=COALESCE($1,user_id), vacation_date=COALESCE($2,vacation_date), hours=COALESCE($3,hours), vacation_type=COALESCE($4,vacation_type), notes=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *`,
+      [user_id, vacation_date, hours, vacation_type, notes !== undefined ? notes : null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating vacation time:', err.message);
+    res.status(500).json({ error: 'Failed to update vacation time' });
+  }
+});
+
+// DELETE vacation entry
+app.delete('/api/vacation-time/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM vacation_time WHERE id=$1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting vacation time:', err.message);
+    res.status(500).json({ error: 'Failed to delete vacation time' });
   }
 });
 

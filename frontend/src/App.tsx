@@ -21,6 +21,7 @@ import InvoicesPage from './pages/InvoicesPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SchedulerDashboardPage from './pages/SchedulerDashboardPage';
+import VacationTimePage from './pages/VacationTimePage';
 import './App.css';
 
 const bgStyle: React.CSSProperties = {
@@ -157,6 +158,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <InvoicesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vacation-time"
+            element={
+              <ProtectedRoute>
+                <VacationTimePage />
               </ProtectedRoute>
             }
           />
