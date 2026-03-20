@@ -20,6 +20,8 @@ const PayrollPage: React.FC = () => {
   const [forms, setForms] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<{ [day: string]: string[] }>({});
   const [vacationData, setVacationData] = useState<any[]>([]);
+  const [allVacationData, setAllVacationData] = useState<any[]>([]);
+  const [vacationProfiles, setVacationProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -40,10 +42,14 @@ const PayrollPage: React.FC = () => {
       authFetch(FORMS_API_URL).then(res => {
         if (!res.ok) throw new Error('Failed to fetch forms');
         return res.json();
-      })
-    ]).then(([usersData, formsData]) => {
+      }),
+      authFetch(`${API_BASE_URL}/vacation-profiles`).then(res => res.ok ? res.json() : []).catch(() => []),
+      authFetch(`${API_BASE_URL}/vacation-time`).then(res => res.ok ? res.json() : []).catch(() => [])
+    ]).then(([usersData, formsData, profilesData, allVacData]) => {
       setUsers(usersData.filter((u: any) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
       setForms(formsData);
+      setVacationProfiles(profilesData);
+      setAllVacationData(allVacData);
       setLoading(false);
     }).catch(() => {
       setError('Failed to load data.');
@@ -91,11 +97,15 @@ const PayrollPage: React.FC = () => {
       setError('Failed to load call hours data.');
     });
 
-    // Also fetch vacation data for the date range
+    // Also fetch vacation data for the date range + refresh profiles
     authFetch(`${API_BASE_URL}/vacation-time?from=${fromDate}&to=${toDate}`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setVacationData(data))
       .catch(() => setVacationData([]));
+    authFetch(`${API_BASE_URL}/vacation-profiles`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setVacationProfiles(data))
+      .catch(() => {});
   }, [fromDate, toDate, userRole]);
 
   // Helper: parse date string to Date object
@@ -361,6 +371,32 @@ const PayrollPage: React.FC = () => {
                 </tr>
               </tbody>
             </table>
+            {/* Vacation Accrual Balance */}
+            {(() => {
+              const profile = vacationProfiles.find((p: any) => String(p.user_id) === String(rsa.id));
+              if (!profile) return null;
+              const today = new Date();
+              const start = new Date(profile.employment_start_date + 'T00:00:00');
+              const daysSinceStart = Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86400000));
+              const periodsWorked = Math.floor(daysSinceStart / 14);
+              const hoursEarned = Number((periodsWorked * parseFloat(profile.accrual_rate)).toFixed(2));
+              // Total hours used = ALL vacation entries for this RSA (not just current period)
+              const allUsed = allVacationData
+                .filter((v: any) => String(v.user_id) === String(rsa.id))
+                .reduce((sum: number, v: any) => sum + (parseFloat(v.hours) || 0), 0);
+              const hoursRemaining = Number((hoursEarned - allUsed).toFixed(2));
+              return (
+                <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 20px', marginBottom: 8, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, color: '#4338ca', fontSize: 14 }}>🏖️ Vacation Accrual</span>
+                  <span style={{ fontSize: 13 }}>Start: <b>{profile.employment_start_date?.split('T')[0]}</b></span>
+                  <span style={{ fontSize: 13 }}>Rate: <b>{profile.accrual_rate} hrs/period</b></span>
+                  <span style={{ fontSize: 13 }}>Periods: <b>{periodsWorked}</b></span>
+                  <span style={{ fontSize: 13, color: '#15803d' }}>Earned: <b>{hoursEarned} hrs</b></span>
+                  <span style={{ fontSize: 13, color: '#dc2626' }}>Used: <b>{allUsed.toFixed(2)} hrs</b></span>
+                  <span style={{ fontSize: 13, color: hoursRemaining >= 0 ? '#15803d' : '#dc2626', fontWeight: 700 }}>Balance: {hoursRemaining} hrs ({(hoursRemaining / 8).toFixed(1)} days)</span>
+                </div>
+              );
+            })()}
           </div>
         );
       })}
