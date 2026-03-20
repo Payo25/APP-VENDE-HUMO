@@ -30,8 +30,8 @@ const CallHoursPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, firstAssistant?: string, secondAssistant?: string }
-  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, firstAssistant?: string, secondAssistant?: string }[] }>({});
+  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, assignmentRole?: string }
+  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, assignmentRole?: string }[] }>({});
   const [healthCenters, setHealthCenters] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -91,7 +91,7 @@ const CallHoursPage: React.FC = () => {
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       if (prevList.some((a: any) => String(a.id) === String(rsaId))) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', firstAssistant: '', secondAssistant: '' }] };
+      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', assignmentRole: 'On Call' }] };
     });
   };
 
@@ -108,14 +108,14 @@ const CallHoursPage: React.FC = () => {
     });
   };
 
-  const handleUpdateAssistant = (day: number, rsaId: string, field: 'firstAssistant' | 'secondAssistant', value: string) => {
+  const handleUpdateRole = (day: number, rsaId: string, assignmentRole: string) => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       return {
         ...prev,
         [dateKey]: prevList.map((a: any) =>
-          String(a.id) === String(rsaId) ? { ...a, [field]: value } : a
+          String(a.id) === String(rsaId) ? { ...a, assignmentRole } : a
         )
       };
     });
@@ -356,6 +356,32 @@ cells.push(
                                         </button>
                                       )}
                                     </div>
+                                    {/* Role selector */}
+                                    {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
+                                      <select
+                                        value={a.assignmentRole || 'On Call'}
+                                        onChange={e => handleUpdateRole(thisDay, a.id, e.target.value)}
+                                        style={{
+                                          fontSize: 11, padding: '2px 3px', borderRadius: 4,
+                                          border: `2px solid ${a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706'}`,
+                                          background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : '#fffbeb',
+                                          cursor: 'pointer', width: '100%', marginTop: 2, fontWeight: 600,
+                                          color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706'
+                                        }}
+                                      >
+                                        <option value="On Call">🟠 On Call</option>
+                                        <option value="1st Assistant">🟣 1st Assistant</option>
+                                        <option value="2nd Assistant">🔵 2nd Assistant</option>
+                                      </select>
+                                    ) : (
+                                      <div style={{
+                                        fontSize: 11, fontWeight: 700, marginTop: 2, padding: '1px 4px', borderRadius: 4, display: 'inline-block',
+                                        color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706',
+                                        background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : '#fffbeb'
+                                      }}>
+                                        {a.assignmentRole === '1st Assistant' ? '🟣 1st Asst' : a.assignmentRole === '2nd Assistant' ? '🔵 2nd Asst' : '🟠 On Call'}
+                                      </div>
+                                    )}
                                     {/* Health Center */}
                                     {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
                                       <select
@@ -372,46 +398,6 @@ cells.push(
                                       a.healthCenter && (
                                         <div style={{ fontSize: 11, color: '#1a237e', fontWeight: 600, marginTop: 2 }}>
                                           🏥 {a.healthCenter}
-                                        </div>
-                                      )
-                                    )}
-                                    {/* 1st Assistant */}
-                                    {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
-                                      <select
-                                        key={`1st-${a.id}-${thisDay}`}
-                                        value={a.firstAssistant || ''}
-                                        onChange={e => handleUpdateAssistant(thisDay, a.id, 'firstAssistant', e.target.value)}
-                                        style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
-                                      >
-                                        <option value="">-- 1st Assistant --</option>
-                                        {users.filter(u => String(u.id) !== String(a.id)).map(u => (
-                                          <option key={u.id} value={u.fullName || u.username}>{u.fullName || u.username}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      a.firstAssistant && (
-                                        <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600, marginTop: 2 }}>
-                                          1st: {a.firstAssistant}
-                                        </div>
-                                      )
-                                    )}
-                                    {/* 2nd Assistant */}
-                                    {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
-                                      <select
-                                        key={`2nd-${a.id}-${thisDay}`}
-                                        value={a.secondAssistant || ''}
-                                        onChange={e => handleUpdateAssistant(thisDay, a.id, 'secondAssistant', e.target.value)}
-                                        style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
-                                      >
-                                        <option value="">-- 2nd Assistant --</option>
-                                        {users.filter(u => String(u.id) !== String(a.id)).map(u => (
-                                          <option key={u.id} value={u.fullName || u.username}>{u.fullName || u.username}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      a.secondAssistant && (
-                                        <div style={{ fontSize: 11, color: '#0891b2', fontWeight: 600, marginTop: 2 }}>
-                                          2nd: {a.secondAssistant}
                                         </div>
                                       )
                                     )}
