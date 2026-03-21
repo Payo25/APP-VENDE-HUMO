@@ -24,6 +24,17 @@ import SchedulerDashboardPage from './pages/SchedulerDashboardPage';
 import VacationTimePage from './pages/VacationTimePage';
 import './App.css';
 
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: any) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{padding:40,color:'red'}}><h2>Something went wrong</h2><pre>{String(this.state.error)}</pre></div>;
+    }
+    return this.props.children;
+  }
+}
+
 const bgStyle: React.CSSProperties = {
   minHeight: '100vh',
   minWidth: '100vw',
@@ -50,6 +61,7 @@ function App() {
   return (
     <div style={bgStyle}>
       <Router>
+      <ErrorBoundary>
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -179,6 +191,7 @@ function App() {
           />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+      </ErrorBoundary>
       </Router>
     </div>
   );
