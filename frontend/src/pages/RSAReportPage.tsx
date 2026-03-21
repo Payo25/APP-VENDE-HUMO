@@ -97,11 +97,15 @@ const PayrollPage: React.FC = () => {
       setError('Failed to load call hours data.');
     });
 
-    // Also fetch vacation data for the date range + refresh profiles
+    // Fetch vacation data for the date range, all vacation data, and refresh profiles
     authFetch(`${API_BASE_URL}/vacation-time?from=${fromDate}&to=${toDate}`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setVacationData(data))
       .catch(() => setVacationData([]));
+    authFetch(`${API_BASE_URL}/vacation-time`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setAllVacationData(data))
+      .catch(() => setAllVacationData([]));
     authFetch(`${API_BASE_URL}/vacation-profiles`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setVacationProfiles(data))
