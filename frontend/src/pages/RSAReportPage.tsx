@@ -413,7 +413,7 @@ const PayrollPage: React.FC = () => {
                 .filter((v: any) => String(v.user_id) === String(rsa.id))
                 .reduce((sum: number, v: any) => sum + (parseFloat(v.hours) || 0), 0);
               const hoursRemaining = Number((hoursEarned - allUsed).toFixed(2));
-              const currentVacRate = profile.vacation_hourly_rate ? parseFloat(profile.vacation_hourly_rate) : (rsa.hourlyRate || 3.00);
+              const currentVacRate = profile.vacation_hourly_rate ? parseFloat(profile.vacation_hourly_rate) : parseFloat(rsa.hourlyRate) || 3.00;
               return (
                 <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 20px', marginBottom: 8, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, color: '#4338ca', fontSize: 14 }}>🏖️ Vacation Accrual</span>
