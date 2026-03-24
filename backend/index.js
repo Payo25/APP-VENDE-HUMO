@@ -334,6 +334,24 @@ async function migrateDatabase() {
         lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Create vacation_requests table for RSA vacation/PTO requests with approval workflow
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vacation_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        request_type VARCHAR(50) NOT NULL DEFAULT 'Vacation',
+        request_date DATE NOT NULL,
+        hours DECIMAL(5,2) NOT NULL DEFAULT 8,
+        notes TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+        reviewed_by INTEGER REFERENCES users(id),
+        review_notes TEXT,
+        reviewed_at TIMESTAMP,
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
     
     console.log('✅ Database schema updated');
   } catch (err) {
@@ -1654,6 +1672,168 @@ app.get('/api/my-vacation', requireRole('Registered Surgical Assistant', 'Team L
   } catch (err) {
     console.error('Error fetching my vacation data:', err.message);
     res.status(500).json({ error: 'Failed to fetch vacation data' });
+  }
+});
+
+// ========== VACATION REQUESTS (RSA request + Scheduler approval) ==========
+
+// POST: RSA submits a vacation/PTO request
+app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 'Team Leader'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { request_type, request_date, hours, notes } = req.body;
+    if (!request_date) return res.status(400).json({ error: 'request_date is required' });
+    const result = await pool.query(
+      `INSERT INTO vacation_requests (user_id, request_type, request_date, hours, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, request_type || 'Vacation', request_date, hours || 8, notes || null]
+    );
+    // Send email notification to scheduler/BA
+    try {
+      const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [userId]);
+      const rsaName = userResult.rows[0]?.fullname || req.user.username;
+      const appUrl = process.env.APP_URL || 'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net';
+      await sendEmailNotification(
+        `🏖️ New ${request_type || 'Vacation'} Request from ${rsaName}`,
+        `<h2>New ${request_type || 'Vacation'} Request</h2>
+         <p><strong>RSA:</strong> ${rsaName}</p>
+         <p><strong>Type:</strong> ${request_type || 'Vacation'}</p>
+         <p><strong>Date:</strong> ${request_date}</p>
+         <p><strong>Hours:</strong> ${hours || 8}</p>
+         ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ''}
+         <p><strong>Status:</strong> Pending</p>
+         <br/>
+         <p><a href="${appUrl}/vacation-requests" style="background:#667eea;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Review Request</a></p>`
+      );
+    } catch (emailErr) {
+      console.error('Email notification failed for vacation request:', emailErr.message);
+    }
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating vacation request:', err.message);
+    res.status(500).json({ error: 'Failed to create vacation request' });
+  }
+});
+
+// GET: RSA gets their own requests
+app.get('/api/vacation-requests/mine', requireRole('Registered Surgical Assistant', 'Team Leader', 'Business Assistant', 'Scheduler'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT vr.*, u.fullname as user_name, ru.fullname as reviewer_name 
+       FROM vacation_requests vr 
+       JOIN users u ON vr.user_id = u.id 
+       LEFT JOIN users ru ON vr.reviewed_by = ru.id
+       WHERE vr.user_id = $1 
+       ORDER BY vr.request_date DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching my vacation requests:', err.message);
+    res.status(500).json({ error: 'Failed to fetch requests' });
+  }
+});
+
+// GET: Scheduler/BA gets all pending requests
+app.get('/api/vacation-requests', requireRole('Scheduler', 'Business Assistant'), async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = `SELECT vr.*, u.fullname as user_name, ru.fullname as reviewer_name 
+                 FROM vacation_requests vr 
+                 JOIN users u ON vr.user_id = u.id 
+                 LEFT JOIN users ru ON vr.reviewed_by = ru.id`;
+    const params = [];
+    if (status) {
+      params.push(status);
+      query += ` WHERE vr.status = $${params.length}`;
+    }
+    query += ` ORDER BY vr.createdat DESC`;
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching vacation requests:', err.message);
+    res.status(500).json({ error: 'Failed to fetch requests' });
+  }
+});
+
+// PUT: Scheduler/BA approves or denies a request
+app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business Assistant'), async (req, res) => {
+  try {
+    const { status, review_notes } = req.body;
+    if (!status || !['Approved', 'Denied'].includes(status)) {
+      return res.status(400).json({ error: 'status must be Approved or Denied' });
+    }
+    const result = await pool.query(
+      `UPDATE vacation_requests SET status=$1, review_notes=$2, reviewed_by=$3, reviewed_at=CURRENT_TIMESTAMP, lastmodified=CURRENT_TIMESTAMP WHERE id=$4 RETURNING *`,
+      [status, review_notes || null, req.user.id, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
+    const request = result.rows[0];
+    
+    // If approved, also create a vacation_time entry
+    if (status === 'Approved') {
+      await pool.query(
+        `INSERT INTO vacation_time (user_id, vacation_date, hours, vacation_type, notes) VALUES ($1, $2, $3, $4, $5)`,
+        [request.user_id, request.request_date, request.hours, request.request_type, `Approved request #${request.id}`]
+      );
+    }
+    
+    // Send email to RSA about the decision
+    try {
+      const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [request.user_id]);
+      const rsaName = userResult.rows[0]?.fullname || 'RSA';
+      const reviewerResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [req.user.id]);
+      const reviewerName = reviewerResult.rows[0]?.fullname || 'Scheduler';
+      // Look up RSA email from rsa_emails table
+      const emailResult = await pool.query(
+        'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [rsaName]
+      );
+      const rsaEmail = emailResult.rows[0]?.email;
+      const statusEmoji = status === 'Approved' ? '✅' : '❌';
+      const statusColor = status === 'Approved' ? '#15803d' : '#dc2626';
+      const emailHtml = `<h2>${statusEmoji} ${request.request_type} Request ${status}</h2>
+        <p>Hi ${rsaName},</p>
+        <p>Your <strong>${request.request_type}</strong> request has been <strong style="color:${statusColor}">${status}</strong> by ${reviewerName}.</p>
+        <p><strong>Date:</strong> ${request.request_date}</p>
+        <p><strong>Hours:</strong> ${request.hours}</p>
+        ${review_notes ? `<p><strong>Notes:</strong> ${review_notes}</p>` : ''}
+        ${status === 'Approved' ? '<p style="color:#15803d;font-weight:600;">The hours have been added to your vacation/PTO record.</p>' : ''}`;
+      // Send to RSA directly if we have their email
+      if (rsaEmail && process.env.SENDGRID_API_KEY) {
+        await sgMail.send({
+          to: rsaEmail,
+          from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+          subject: `${statusEmoji} Your ${request.request_type} Request has been ${status}`,
+          html: emailHtml,
+        });
+      }
+      // Also send to admin/notification email
+      await sendEmailNotification(
+        `${statusEmoji} ${request.request_type} Request ${status} - ${rsaName}`,
+        emailHtml
+      );
+    } catch (emailErr) {
+      console.error('Email notification failed for vacation review:', emailErr.message);
+    }
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error reviewing vacation request:', err.message);
+    res.status(500).json({ error: 'Failed to review request' });
+  }
+});
+
+// DELETE: RSA can cancel their own pending request
+app.delete('/api/vacation-requests/:id', requireRole('Registered Surgical Assistant', 'Team Leader'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM vacation_requests WHERE id=$1 AND user_id=$2 AND status=$3 RETURNING *',
+      [req.params.id, req.user.id, 'Pending']
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Request not found or already reviewed' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting vacation request:', err.message);
+    res.status(500).json({ error: 'Failed to delete request' });
   }
 });
 

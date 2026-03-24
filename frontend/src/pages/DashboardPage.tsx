@@ -226,6 +226,31 @@ const DashboardPage: React.FC = () => {
           )}
           {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant') && (
             <a
+              href="/vacation-requests"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(245,158,11,0.08)',
+                transition: 'background 0.2s',
+                marginBottom: 12
+              }}
+              tabIndex={0}
+              aria-label="Vacation Requests"
+            >
+              📋 Vacation & PTO Requests
+            </a>
+          )}
+          {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant') && (
+            <a
               href="/rsa-emails"
               style={{
                 display: 'block',
