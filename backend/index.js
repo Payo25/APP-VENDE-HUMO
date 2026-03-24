@@ -1638,6 +1638,25 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
   }
 });
 
+// ========== MY VACATION (RSA self-service) ==========
+
+// GET own vacation profile + entries for logged-in RSA/TL
+app.get('/api/my-vacation', requireRole('Registered Surgical Assistant', 'Team Leader', 'Business Assistant', 'Scheduler'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [profileResult, entriesResult] = await Promise.all([
+      pool.query(`SELECT vp.*, u.fullname as user_name FROM vacation_profiles vp JOIN users u ON vp.user_id = u.id WHERE vp.user_id = $1`, [userId]),
+      pool.query(`SELECT * FROM vacation_time WHERE user_id = $1 ORDER BY vacation_date DESC`, [userId])
+    ]);
+    const profile = profileResult.rows[0] || null;
+    const entries = entriesResult.rows;
+    res.json({ profile, entries });
+  } catch (err) {
+    console.error('Error fetching my vacation data:', err.message);
+    res.status(500).json({ error: 'Failed to fetch vacation data' });
+  }
+});
+
 // ========== VACATION PROFILES CRUD ==========
 
 // GET all vacation profiles (with user info)

@@ -363,23 +363,25 @@ cells.push(
                                         onChange={e => handleUpdateRole(thisDay, a.id, e.target.value)}
                                         style={{
                                           fontSize: 11, padding: '2px 3px', borderRadius: 4,
-                                          border: `2px solid ${a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706'}`,
-                                          background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : '#fffbeb',
+                                          border: `2px solid ${a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'}`,
+                                          background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : a.assignmentRole === 'Vacation' ? '#f0fdf4' : a.assignmentRole === 'PTO' ? '#faf5ff' : '#fffbeb',
                                           cursor: 'pointer', width: '100%', marginTop: 2, fontWeight: 600,
-                                          color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706'
+                                          color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'
                                         }}
                                       >
                                         <option value="On Call">🟠 On Call</option>
                                         <option value="1st Assistant">🟣 1st Assistant</option>
                                         <option value="2nd Assistant">🔵 2nd Assistant</option>
+                                        <option value="Vacation">🌴 Vacation</option>
+                                        <option value="PTO">📋 PTO</option>
                                       </select>
                                     ) : (
                                       <div style={{
                                         fontSize: 11, fontWeight: 700, marginTop: 2, padding: '1px 4px', borderRadius: 4, display: 'inline-block',
-                                        color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : '#d97706',
-                                        background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : '#fffbeb'
+                                        color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706',
+                                        background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : a.assignmentRole === 'Vacation' ? '#f0fdf4' : a.assignmentRole === 'PTO' ? '#faf5ff' : '#fffbeb'
                                       }}>
-                                        {a.assignmentRole === '1st Assistant' ? '🟣 1st Asst' : a.assignmentRole === '2nd Assistant' ? '🔵 2nd Asst' : '🟠 On Call'}
+                                        {a.assignmentRole === '1st Assistant' ? '🟣 1st Asst' : a.assignmentRole === '2nd Assistant' ? '🔵 2nd Asst' : a.assignmentRole === 'Vacation' ? '🌴 Vacation' : a.assignmentRole === 'PTO' ? '📋 PTO' : '🟠 On Call'}
                                       </div>
                                     )}
                                     {/* Health Center */}

@@ -342,6 +342,27 @@ const DashboardPage: React.FC = () => {
             📊 My On-Call Hours
           </button>
         )}
+        {(localStorage.getItem('role') === 'Registered Surgical Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+          <button
+            onClick={() => navigate('/my-vacation')}
+            style={{
+              width: '100%',
+              padding: '12px 0',
+              background: 'linear-gradient(90deg, #15803d 0%, #166534 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(21,128,61,0.08)',
+              transition: 'background 0.2s',
+              marginBottom: 12
+            }}
+          >
+            🏖️ My Vacation & PTO
+          </button>
+        )}
         {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Team Leader') && (
           <button
             onClick={() => navigate('/manage-user-schedule')}

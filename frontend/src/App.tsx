@@ -23,6 +23,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import SchedulerDashboardPage from './pages/SchedulerDashboardPage';
 import VacationTimePage from './pages/VacationTimePage';
 import MyCallHoursPage from './pages/MyCallHoursPage';
+import MyVacationPage from './pages/MyVacationPage';
 import './App.css';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
@@ -125,6 +126,7 @@ function App() {
           />
           <Route path="/call-hours" element={<ProtectedRoute><CallHoursPage /></ProtectedRoute>} />
           <Route path="/my-call-hours" element={<ProtectedRoute><MyCallHoursPage /></ProtectedRoute>} />
+          <Route path="/my-vacation" element={<ProtectedRoute><MyVacationPage /></ProtectedRoute>} />
           <Route
             path="/call-hours-personal"
             element={
