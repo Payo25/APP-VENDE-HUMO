@@ -22,8 +22,6 @@ const PayrollPage: React.FC = () => {
   const [vacationData, setVacationData] = useState<any[]>([]);
   const [allVacationData, setAllVacationData] = useState<any[]>([]);
   const [vacationProfiles, setVacationProfiles] = useState<any[]>([]);
-  const [editingVacRate, setEditingVacRate] = useState<number | null>(null);
-  const [vacRateInput, setVacRateInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -131,24 +129,6 @@ const PayrollPage: React.FC = () => {
     return dates;
   };
 
-  // Save vacation hourly rate for a profile
-  const saveVacationRate = async (profileId: number, rate: string) => {
-    const numRate = parseFloat(rate);
-    if (isNaN(numRate) || numRate < 0) return;
-    try {
-      const res = await authFetch(`${API_BASE_URL}/vacation-profiles/${profileId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vacation_hourly_rate: numRate || null })
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setVacationProfiles(prev => prev.map(p => p.id === profileId ? { ...p, vacation_hourly_rate: updated.vacation_hourly_rate } : p));
-      }
-    } catch {}
-    setEditingVacRate(null);
-  };
-
   // Compute date range
   let dateRange: Date[] = [];
   let weekRanges: { start: number; end: number; startDate: Date; endDate: Date }[] = [];
@@ -252,17 +232,14 @@ const PayrollPage: React.FC = () => {
       csv += `"${rsa.fullName || rsa.username}",Total,,${totalCallHour},${totalShiftLT3},${totalShiftGT3},${totalVoluntary},${totalCancelled},${totalVacation}\n`;
       // Add payment row for this RSA - use user's hourly rate
       const hourlyRate = rsa.hourlyRate || 3.00;
-      const rsaProfile = vacationProfiles.find((p: any) => String(p.user_id) === String(rsa.id));
-      const vacRate = rsaProfile?.vacation_hourly_rate ? parseFloat(rsaProfile.vacation_hourly_rate) : hourlyRate;
       const callHourPay = totalCallHour * hourlyRate;
       const shiftLT3Pay = totalShiftLT3 * 100;
       const shiftGT3Pay = totalShiftGT3 * 150;
       const voluntaryPay = totalVoluntary * 150;
       const cancelledPay = totalCancelled * 50;
-      const vacationPay = totalVacation * vacRate;
-      csv += `"${rsa.fullName || rsa.username}",Amount to Pay,,$${callHourPay},$${shiftLT3Pay},$${shiftGT3Pay},$${voluntaryPay},$${cancelledPay},$${vacationPay}\n`;
+      csv += `"${rsa.fullName || rsa.username}",Amount to Pay,,$${callHourPay},$${shiftLT3Pay},$${shiftGT3Pay},$${voluntaryPay},$${cancelledPay},${totalVacation || ''}\n`;
       // Add total payable row for this RSA
-      const totalPay = callHourPay + shiftLT3Pay + shiftGT3Pay + voluntaryPay + cancelledPay + vacationPay;
+      const totalPay = callHourPay + shiftLT3Pay + shiftGT3Pay + voluntaryPay + cancelledPay;
       csv += `"${rsa.fullName || rsa.username}",Total Payable,,,,,,,$${totalPay}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -333,15 +310,12 @@ const PayrollPage: React.FC = () => {
         const totalVacation = rows.reduce((sum, r) => sum + r.vacHours, 0);
         // Payment calculations - use user's hourly rate
         const hourlyRate = rsa.hourlyRate || 3.00;
-        const rsaProfile = vacationProfiles.find((p: any) => String(p.user_id) === String(rsa.id));
-        const vacRate = rsaProfile?.vacation_hourly_rate ? parseFloat(rsaProfile.vacation_hourly_rate) : hourlyRate;
         const callHourPay = totalCallHour * hourlyRate;
         const shiftLT3Pay = totalShiftLT3 * 100;
         const shiftGT3Pay = totalShiftGT3 * 150;
         const voluntaryPay = totalVoluntary * 150;
         const cancelledPay = totalCancelled * 50;
-        const vacationPay = totalVacation * vacRate;
-        const totalPay = callHourPay + shiftLT3Pay + shiftGT3Pay + voluntaryPay + cancelledPay + vacationPay;
+        const totalPay = callHourPay + shiftLT3Pay + shiftGT3Pay + voluntaryPay + cancelledPay;
         return (
           <div key={rsa.id} style={{ marginBottom: 48 }}>
             <h3 style={{ marginBottom: 8 }}>{rsa.fullName || rsa.username}</h3>
@@ -391,7 +365,7 @@ const PayrollPage: React.FC = () => {
                   <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${shiftGT3Pay}</td>
                   <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${voluntaryPay}</td>
                   <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${cancelledPay}</td>
-                  <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${vacationPay}</td>
+                  <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{totalVacation || ''}</td>
                 </tr>
                 <tr style={{ fontWeight: 700, background: '#bbf7d0' }}>
                   <td colSpan={2} style={{ padding: 8, border: '1px solid #e2e8f0' }}>Total Payable</td>
@@ -413,7 +387,6 @@ const PayrollPage: React.FC = () => {
                 .filter((v: any) => String(v.user_id) === String(rsa.id))
                 .reduce((sum: number, v: any) => sum + (parseFloat(v.hours) || 0), 0);
               const hoursRemaining = Number((hoursEarned - allUsed).toFixed(2));
-              const currentVacRate = profile.vacation_hourly_rate ? parseFloat(profile.vacation_hourly_rate) : parseFloat(rsa.hourlyRate) || 3.00;
               return (
                 <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 20px', marginBottom: 8, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, color: '#4338ca', fontSize: 14 }}>🏖️ Vacation Accrual</span>
@@ -423,30 +396,6 @@ const PayrollPage: React.FC = () => {
                   <span style={{ fontSize: 13, color: '#15803d' }}>Earned: <b>{hoursEarned} hrs</b></span>
                   <span style={{ fontSize: 13, color: '#dc2626' }}>Used: <b>{allUsed.toFixed(2)} hrs</b></span>
                   <span style={{ fontSize: 13, color: hoursRemaining >= 0 ? '#15803d' : '#dc2626', fontWeight: 700 }}>Balance: {hoursRemaining} hrs ({(hoursRemaining / 8).toFixed(1)} days)</span>
-                  <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    Pay Rate:
-                    {editingVacRate === profile.id ? (
-                      <>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={vacRateInput}
-                          onChange={e => setVacRateInput(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveVacationRate(profile.id, vacRateInput); if (e.key === 'Escape') setEditingVacRate(null); }}
-                          style={{ width: 70, padding: '2px 4px', fontSize: 13, border: '1px solid #6366f1', borderRadius: 4 }}
-                          autoFocus
-                        />
-                        <button onClick={() => saveVacationRate(profile.id, vacRateInput)} style={{ padding: '2px 8px', fontSize: 12, background: '#15803d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✓</button>
-                        <button onClick={() => setEditingVacRate(null)} style={{ padding: '2px 8px', fontSize: 12, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✕</button>
-                      </>
-                    ) : (
-                      <>
-                        <b>${currentVacRate.toFixed(2)}/hr</b>
-                        <button onClick={() => { setEditingVacRate(profile.id); setVacRateInput(String(currentVacRate)); }} style={{ padding: '2px 8px', fontSize: 11, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', marginLeft: 4 }}>Edit</button>
-                      </>
-                    )}
-                  </span>
                 </div>
               );
             })()}
