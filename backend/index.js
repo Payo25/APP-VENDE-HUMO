@@ -1692,9 +1692,7 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
       const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [userId]);
       const rsaName = userResult.rows[0]?.fullname || req.user.username;
       const appUrl = process.env.APP_URL || 'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net';
-      await sendEmailNotification(
-        `🏖️ New ${request_type || 'Vacation'} Request from ${rsaName}`,
-        `<h2>New ${request_type || 'Vacation'} Request</h2>
+      const emailHtml = `<h2>New ${request_type || 'Vacation'} Request</h2>
          <p><strong>RSA:</strong> ${rsaName}</p>
          <p><strong>Type:</strong> ${request_type || 'Vacation'}</p>
          <p><strong>Date:</strong> ${request_date}</p>
@@ -1702,8 +1700,33 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
          ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ''}
          <p><strong>Status:</strong> Pending</p>
          <br/>
-         <p><a href="${appUrl}/vacation-requests" style="background:#667eea;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Review Request</a></p>`
+         <p><a href="${appUrl}/vacation-requests" style="background:#667eea;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Review Request</a></p>`;
+      const emailSubject = `🏖️ New ${request_type || 'Vacation'} Request from ${rsaName}`;
+      
+      // Look up Scheduler and BA emails from rsa_emails table (matched by name from users table)
+      const schedulerUsers = await pool.query(
+        `SELECT u.fullname FROM users u WHERE u.role IN ('Scheduler', 'Business Assistant')`
       );
+      const schedulerEmails = [];
+      for (const su of schedulerUsers.rows) {
+        const emailRow = await pool.query(
+          'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [su.fullname]
+        );
+        if (emailRow.rows[0]?.email) schedulerEmails.push(emailRow.rows[0].email);
+      }
+      
+      if (schedulerEmails.length > 0 && process.env.SENDGRID_API_KEY) {
+        // Send directly to scheduler/BA emails found in rsa_emails
+        await sgMail.send({
+          to: schedulerEmails,
+          from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+          subject: emailSubject,
+          html: emailHtml,
+        });
+        console.log(`✅ Vacation request email sent to schedulers: ${schedulerEmails.join(', ')}`);
+      }
+      // Also send to generic NOTIFICATION_EMAIL_TO as fallback
+      await sendEmailNotification(emailSubject, emailHtml);
     } catch (emailErr) {
       console.error('Email notification failed for vacation request:', emailErr.message);
     }
