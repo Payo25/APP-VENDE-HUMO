@@ -20,6 +20,7 @@ interface VacationProfile {
   user_name: string;
   employment_start_date: string;
   accrual_rate: number;
+  pto: number;
   notes: string | null;
 }
 
@@ -59,6 +60,7 @@ const VacationTimePage: React.FC = () => {
   const [profileUserId, setProfileUserId] = useState('');
   const [profileStartDate, setProfileStartDate] = useState('');
   const [profileRate, setProfileRate] = useState('1.54');
+  const [profilePto, setProfilePto] = useState('0');
   const [profileNotes, setProfileNotes] = useState('');
 
   // Filter state
@@ -141,6 +143,7 @@ const VacationTimePage: React.FC = () => {
     setProfileUserId('');
     setProfileStartDate('');
     setProfileRate('1.54');
+    setProfilePto('0');
     setProfileNotes('');
     setShowProfileForm(false);
   };
@@ -148,7 +151,7 @@ const VacationTimePage: React.FC = () => {
   const handleSaveProfile = async () => {
     if (!profileUserId || !profileStartDate) { setError('Please select an RSA and start date'); return; }
     setError(''); setSuccess('');
-    const body = { user_id: Number(profileUserId), employment_start_date: profileStartDate, accrual_rate: parseFloat(profileRate) || 1.54, notes: profileNotes || null };
+    const body = { user_id: Number(profileUserId), employment_start_date: profileStartDate, accrual_rate: parseFloat(profileRate) || 1.54, pto: parseFloat(profilePto) || 0, notes: profileNotes || null };
     let res;
     if (editProfileId) {
       res = await authFetch(`${API_BASE_URL}/vacation-profiles/${editProfileId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -164,6 +167,7 @@ const VacationTimePage: React.FC = () => {
     setProfileUserId(String(p.user_id));
     setProfileStartDate(p.employment_start_date?.split('T')[0] || '');
     setProfileRate(String(p.accrual_rate));
+    setProfilePto(String(p.pto || 0));
     setProfileNotes(p.notes || '');
     setShowProfileForm(true);
   };
@@ -255,6 +259,10 @@ const VacationTimePage: React.FC = () => {
                   <label style={{ fontWeight: 600, fontSize: 13 }}>Accrual Rate (hrs/week)</label>
                   <input type="number" step="0.01" min="0" value={profileRate} onChange={e => setProfileRate(e.target.value)} style={inputStyle} />
                 </div>
+                <div style={{ flex: 1, minWidth: 120 }}>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>PTO (hrs)</label>
+                  <input type="number" step="0.01" min="0" value={profilePto} onChange={e => setProfilePto(e.target.value)} style={inputStyle} />
+                </div>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontWeight: 600, fontSize: 13 }}>Notes</label>
@@ -280,6 +288,7 @@ const VacationTimePage: React.FC = () => {
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>RSA</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Start Date</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Rate (hrs/week)</th>
+                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>PTO</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Weeks Worked</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Hours Earned</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Hours Used</th>
@@ -296,6 +305,7 @@ const VacationTimePage: React.FC = () => {
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', fontWeight: 600 }}>{p.user_name}</td>
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>{p.employment_start_date?.split('T')[0]}</td>
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>{p.accrual_rate}</td>
+                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#6366f1', fontWeight: 600 }}>{p.pto || 0}</td>
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#1a237e', fontWeight: 600 }}>{bal?.periodsWorked ?? '-'}</td>
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#15803d', fontWeight: 600 }}>{bal?.hoursEarned ?? '-'}</td>
                         <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.hoursUsed ?? '-'}</td>

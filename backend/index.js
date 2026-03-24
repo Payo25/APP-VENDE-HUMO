@@ -309,6 +309,11 @@ async function migrateDatabase() {
       ALTER TABLE vacation_profiles ADD COLUMN IF NOT EXISTS vacation_hourly_rate DECIMAL(8,2);
     `);
 
+    // Add pto column if missing
+    await pool.query(`
+      ALTER TABLE vacation_profiles ADD COLUMN IF NOT EXISTS pto DECIMAL(5,2) DEFAULT 0;
+    `);
+
     // Create invoices table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoices (
@@ -1654,12 +1659,12 @@ app.get('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leader
 // POST create vacation profile
 app.post('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
-    const { user_id, employment_start_date, accrual_rate, vacation_hourly_rate, notes } = req.body;
+    const { user_id, employment_start_date, accrual_rate, vacation_hourly_rate, pto, notes } = req.body;
     if (!user_id || !employment_start_date) return res.status(400).json({ error: 'user_id and employment_start_date are required' });
     const result = await pool.query(
-      `INSERT INTO vacation_profiles (user_id, employment_start_date, accrual_rate, vacation_hourly_rate, notes) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [user_id, employment_start_date, accrual_rate || 1.54, vacation_hourly_rate || null, notes || null]
+      `INSERT INTO vacation_profiles (user_id, employment_start_date, accrual_rate, vacation_hourly_rate, pto, notes) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [user_id, employment_start_date, accrual_rate || 1.54, vacation_hourly_rate || null, pto || 0, notes || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -1672,10 +1677,10 @@ app.post('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leade
 // PUT update vacation profile
 app.put('/api/vacation-profiles/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
-    const { employment_start_date, accrual_rate, vacation_hourly_rate, notes } = req.body;
+    const { employment_start_date, accrual_rate, vacation_hourly_rate, pto, notes } = req.body;
     const result = await pool.query(
-      `UPDATE vacation_profiles SET employment_start_date=COALESCE($1,employment_start_date), accrual_rate=COALESCE($2,accrual_rate), vacation_hourly_rate=$3, notes=$4, lastmodified=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *`,
-      [employment_start_date, accrual_rate, vacation_hourly_rate !== undefined ? vacation_hourly_rate : null, notes !== undefined ? notes : null, req.params.id]
+      `UPDATE vacation_profiles SET employment_start_date=COALESCE($1,employment_start_date), accrual_rate=COALESCE($2,accrual_rate), vacation_hourly_rate=$3, pto=COALESCE($4,pto), notes=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *`,
+      [employment_start_date, accrual_rate, vacation_hourly_rate !== undefined ? vacation_hourly_rate : null, pto !== undefined ? pto : 0, notes !== undefined ? notes : null, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
