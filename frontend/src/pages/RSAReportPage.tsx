@@ -380,8 +380,8 @@ const PayrollPage: React.FC = () => {
               const today = new Date();
               const start = new Date(profile.employment_start_date + 'T00:00:00');
               const daysSinceStart = Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86400000));
-              const periodsWorked = Math.floor(daysSinceStart / 14);
-              const hoursEarned = Number((periodsWorked * parseFloat(profile.accrual_rate)).toFixed(2));
+              const weeksWorked = Math.floor(daysSinceStart / 7);
+              const hoursEarned = Number((weeksWorked * parseFloat(profile.accrual_rate)).toFixed(2));
               // Total hours used = ALL vacation entries for this RSA (not just current period)
               const allUsed = allVacationData
                 .filter((v: any) => String(v.user_id) === String(rsa.id))
@@ -391,8 +391,8 @@ const PayrollPage: React.FC = () => {
                 <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 20px', marginBottom: 8, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, color: '#4338ca', fontSize: 14 }}>🏖️ Vacation Accrual</span>
                   <span style={{ fontSize: 13 }}>Start: <b>{profile.employment_start_date?.split('T')[0]}</b></span>
-                  <span style={{ fontSize: 13 }}>Rate: <b>{profile.accrual_rate} hrs/period</b></span>
-                  <span style={{ fontSize: 13 }}>Periods: <b>{periodsWorked}</b></span>
+                  <span style={{ fontSize: 13 }}>Rate: <b>{profile.accrual_rate} hrs/week</b></span>
+                  <span style={{ fontSize: 13 }}>Weeks: <b>{weeksWorked}</b></span>
                   <span style={{ fontSize: 13, color: '#15803d' }}>Earned: <b>{hoursEarned} hrs</b></span>
                   <span style={{ fontSize: 13, color: '#dc2626' }}>Used: <b>{allUsed.toFixed(2)} hrs</b></span>
                   <span style={{ fontSize: 13, color: hoursRemaining >= 0 ? '#15803d' : '#dc2626', fontWeight: 700 }}>Balance: {hoursRemaining} hrs ({(hoursRemaining / 8).toFixed(1)} days)</span>

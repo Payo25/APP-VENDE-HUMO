@@ -181,7 +181,7 @@ const VacationTimePage: React.FC = () => {
     if (isNaN(start.getTime())) return null;
     const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / 86400000);
     if (daysSinceStart < 0) return { periodsWorked: 0, hoursEarned: 0, hoursUsed: 0, hoursRemaining: 0 };
-    const periodsWorked = Math.floor(daysSinceStart / 14);
+    const periodsWorked = Math.floor(daysSinceStart / 7);
     const hoursEarned = Number((periodsWorked * profile.accrual_rate).toFixed(2));
     const hoursUsed = entries.filter(e => String(e.user_id) === String(profile.user_id)).reduce((sum, e) => sum + (parseFloat(String(e.hours)) || 0), 0);
     const hoursRemaining = Number((hoursEarned - hoursUsed).toFixed(2));
@@ -228,7 +228,7 @@ const VacationTimePage: React.FC = () => {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <p style={{ margin: 0, color: '#666', fontSize: 14 }}>
-              Create a vacation profile for each RSA to set their employment start date and accrual rate. The accrual calculator will automatically compute their balance.
+              Create a vacation profile for each RSA to set their employment start date and weekly accrual rate. Vacation hours accrue automatically each week.
             </p>
             <button onClick={() => { resetProfileForm(); setShowProfileForm(true); }} style={{ padding: '10px 24px', background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               + Create Profile
@@ -252,7 +252,7 @@ const VacationTimePage: React.FC = () => {
                   <input type="date" value={profileStartDate} onChange={e => setProfileStartDate(e.target.value)} style={inputStyle} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label style={{ fontWeight: 600, fontSize: 13 }}>Accrual Rate (hrs/pay period)</label>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>Accrual Rate (hrs/week)</label>
                   <input type="number" step="0.01" min="0" value={profileRate} onChange={e => setProfileRate(e.target.value)} style={inputStyle} />
                 </div>
               </div>
@@ -279,8 +279,8 @@ const VacationTimePage: React.FC = () => {
                   <tr style={{ background: '#f1f5f9' }}>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>RSA</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Start Date</th>
-                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Rate (hrs/period)</th>
-                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Periods Worked</th>
+                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Rate (hrs/week)</th>
+                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Weeks Worked</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Hours Earned</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Hours Used</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Balance</th>
