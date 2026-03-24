@@ -3,6 +3,9 @@
 
 name: Build and deploy Node.js app to Azure Web App - surgical-backend-new
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches:
