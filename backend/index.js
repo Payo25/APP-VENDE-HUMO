@@ -707,6 +707,18 @@ app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registe
   }
 });
 
+// --- Current user profile ---
+app.get('/api/me', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, fullname, role, hourly_rate FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const u = result.rows[0];
+    res.json({ id: u.id, fullName: u.fullname, role: u.role, hourlyRate: u.hourly_rate || 3.00 });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // --- Users API using PostgreSQL ---
 app.get('/api/users', requireRole('Admin', 'Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
