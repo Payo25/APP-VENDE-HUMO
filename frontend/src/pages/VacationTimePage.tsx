@@ -66,6 +66,13 @@ const VacationTimePage: React.FC = () => {
   // Filter state
   const [filterUserId, setFilterUserId] = useState('');
 
+  // Inline edit state
+  const [inlineEditId, setInlineEditId] = useState<number | null>(null);
+  const [inlineStartDate, setInlineStartDate] = useState('');
+  const [inlineRate, setInlineRate] = useState('');
+  const [inlinePto, setInlinePto] = useState('');
+  const [inlineNotes, setInlineNotes] = useState('');
+
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Team Leader' && userRole !== 'Scheduler') return;
     Promise.all([
@@ -75,7 +82,7 @@ const VacationTimePage: React.FC = () => {
     ]).then(([vacData, profData, usersData]) => {
       setEntries(vacData);
       setProfiles(profData);
-      setUsers(usersData.filter((u: User) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader'));
+      setUsers(usersData.filter((u: User) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader' || u.role === 'Scheduler'));
       setLoading(false);
     }).catch(() => {
       setError('Failed to load data');
@@ -162,14 +169,22 @@ const VacationTimePage: React.FC = () => {
     else { const data = await res.json().catch(() => ({})); setError(data.error || 'Failed to save profile'); }
   };
 
-  const handleEditProfile = (p: VacationProfile) => {
-    setEditProfileId(p.id);
-    setProfileUserId(String(p.user_id));
-    setProfileStartDate(p.employment_start_date?.split('T')[0] || '');
-    setProfileRate(String(p.accrual_rate));
-    setProfilePto(String(p.pto || 0));
-    setProfileNotes(p.notes || '');
-    setShowProfileForm(true);
+  const startInlineEdit = (p: VacationProfile) => {
+    setInlineEditId(p.id);
+    setInlineStartDate(p.employment_start_date?.split('T')[0] || '');
+    setInlineRate(String(p.accrual_rate));
+    setInlinePto(String(p.pto || 0));
+    setInlineNotes(p.notes || '');
+  };
+
+  const cancelInlineEdit = () => setInlineEditId(null);
+
+  const saveInlineEdit = async (p: VacationProfile) => {
+    setError(''); setSuccess('');
+    const body = { user_id: p.user_id, employment_start_date: inlineStartDate, accrual_rate: parseFloat(inlineRate) || 0, pto: parseFloat(inlinePto) || 0, notes: inlineNotes || null };
+    const res = await authFetch(`${API_BASE_URL}/vacation-profiles/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) { setInlineEditId(null); await fetchProfiles(); setSuccess('Profile updated!'); }
+    else { const data = await res.json().catch(() => ({})); setError(data.error || 'Failed to save'); }
   };
 
   const handleDeleteProfile = async (id: number) => {
@@ -304,30 +319,61 @@ const VacationTimePage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {profiles.map(p => {
+                  {profiles.filter(p => {
+                    // Scheduler cannot see their own vacation profile
+                    if (userRole === 'Scheduler') {
+                      const myUserId = localStorage.getItem('userId');
+                      return String(p.user_id) !== String(myUserId);
+                    }
+                    return true;
+                  }).map(p => {
                     const bal = getBalance(p);
+                    const isEditing = inlineEditId === p.id;
+                    const cellStyle = { padding: 10, border: '1px solid #e2e8f0' };
+                    const inlineInput: React.CSSProperties = { padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13, width: '100%', boxSizing: 'border-box' };
                     return (
                       <tr key={p.id}>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', fontWeight: 600 }}>{p.user_name}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>{p.employment_start_date?.split('T')[0]}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>{p.accrual_rate}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#1a237e', fontWeight: 600 }}>{bal?.periodsWorked ?? '-'}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#15803d', fontWeight: 600 }}>{bal?.hoursEarned ?? '-'}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.vacationUsed ?? '-'}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700, color: (bal?.vacationBalance ?? 0) >= 0 ? '#15803d' : '#dc2626' }}>
+                        <td style={{ ...cellStyle, fontWeight: 600 }}>{p.user_name}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>
+                          {isEditing ? <input type="date" value={inlineStartDate} onChange={e => setInlineStartDate(e.target.value)} style={inlineInput} />
+                            : p.employment_start_date?.split('T')[0]}
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>
+                          {isEditing ? <input type="number" step="0.01" min="0" value={inlineRate} onChange={e => setInlineRate(e.target.value)} style={{ ...inlineInput, width: 70 }} />
+                            : p.accrual_rate}
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#1a237e', fontWeight: 600 }}>{bal?.periodsWorked ?? '-'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#15803d', fontWeight: 600 }}>{bal?.hoursEarned ?? '-'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.vacationUsed ?? '-'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: (bal?.vacationBalance ?? 0) >= 0 ? '#15803d' : '#dc2626' }}>
                           {bal?.vacationBalance ?? '-'} hrs
                           <div style={{ fontSize: 11, color: '#888', fontWeight: 400 }}>({((bal?.vacationBalance ?? 0) / 8).toFixed(1)} days)</div>
                         </td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#6366f1', fontWeight: 600 }}>{bal?.ptoAllocation ?? '-'}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.ptoUsed ?? '-'}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700, color: (bal?.ptoBalance ?? 0) >= 0 ? '#6366f1' : '#dc2626' }}>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#6366f1', fontWeight: 600 }}>
+                          {isEditing ? <input type="number" step="0.01" min="0" value={inlinePto} onChange={e => setInlinePto(e.target.value)} style={{ ...inlineInput, width: 70 }} />
+                            : bal?.ptoAllocation ?? '-'}
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.ptoUsed ?? '-'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: (bal?.ptoBalance ?? 0) >= 0 ? '#6366f1' : '#dc2626' }}>
                           {bal?.ptoBalance ?? '-'} hrs
                           <div style={{ fontSize: 11, color: '#888', fontWeight: 400 }}>({((bal?.ptoBalance ?? 0) / 8).toFixed(1)} days)</div>
                         </td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', fontSize: 13 }}>{p.notes || ''}</td>
-                        <td style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                          <button onClick={() => handleEditProfile(p)} style={{ padding: '4px 12px', marginRight: 6, background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Edit</button>
-                          <button onClick={() => handleDeleteProfile(p.id)} style={{ padding: '4px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Delete</button>
+                        <td style={{ ...cellStyle, fontSize: 13 }}>
+                          {isEditing ? <input value={inlineNotes} onChange={e => setInlineNotes(e.target.value)} style={inlineInput} />
+                            : p.notes || ''}
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {isEditing ? (
+                            <>
+                              <button onClick={() => saveInlineEdit(p)} style={{ padding: '4px 10px', marginRight: 4, background: '#15803d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Save</button>
+                              <button onClick={cancelInlineEdit} style={{ padding: '4px 10px', background: '#94a3b8', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => startInlineEdit(p)} style={{ padding: '4px 12px', marginRight: 6, background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Edit</button>
+                              <button onClick={() => handleDeleteProfile(p.id)} style={{ padding: '4px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Delete</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );
