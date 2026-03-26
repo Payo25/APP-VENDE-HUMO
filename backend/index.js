@@ -1736,7 +1736,7 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
       if (schedulerEmails.length > 0 && process.env.SENDGRID_API_KEY) {
         await sgMail.send({
           to: schedulerEmails,
-          from: 'Info@proassisting.net',
+          from: { email: 'info@proassisting.net', name: 'Proassisting' },
           subject: emailSubject,
           html: emailHtml,
         });
@@ -1830,7 +1830,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
       const rsaEmail = emailResult.rows[0]?.email;
       const statusEmoji = status === 'Approved' ? '✅' : '❌';
       const statusColor = status === 'Approved' ? '#15803d' : '#dc2626';
-      const emailFrom = 'Info@proassisting.net';
+      const emailFrom = { email: 'info@proassisting.net', name: 'Proassisting' };
       const emailHtml = `<h2>${statusEmoji} ${request.request_type} Request ${status}</h2>
         <p>Hi ${rsaName},</p>
         <p>Your <strong>${request.request_type}</strong> request has been <strong style="color:${statusColor}">${status}</strong> by ${reviewerName}.</p>
@@ -1839,6 +1839,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
         ${review_notes ? `<p><strong>Notes:</strong> ${review_notes}</p>` : ''}
         ${status === 'Approved' ? '<p style="color:#15803d;font-weight:600;">The hours have been added to your vacation/PTO record.</p>' : ''}`;
       const emailSubject = `${statusEmoji} Your ${request.request_type} Request has been ${status}`;
+      console.log(`📧 Attempting vacation review email: RSA=${rsaName}, rsaEmail=${rsaEmail}, status=${status}`);
       // Send to RSA directly if we have their email
       if (rsaEmail && process.env.SENDGRID_API_KEY) {
         await sgMail.send({
@@ -1848,31 +1849,34 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
           html: emailHtml,
         });
         console.log(`✅ Vacation review email sent to RSA: ${rsaEmail}`);
+      } else {
+        console.log(`⚠️ RSA email not sent: rsaEmail=${rsaEmail}, SENDGRID_KEY=${!!process.env.SENDGRID_API_KEY}`);
       }
-      // Also send to Info@proassisting.net + any configured NOTIFICATION_EMAIL_TO
+      // Also send copy to info@proassisting.net
       if (process.env.SENDGRID_API_KEY) {
-        const ccRecipients = ['Info@proassisting.net'];
+        const officeRecipients = ['info@proassisting.net'];
         if (process.env.NOTIFICATION_EMAIL_TO) {
           process.env.NOTIFICATION_EMAIL_TO.split(',').forEach(e => {
-            if (e.trim() && !ccRecipients.some(r => r.toLowerCase() === e.trim().toLowerCase())) {
-              ccRecipients.push(e.trim());
+            if (e.trim() && !officeRecipients.some(r => r.toLowerCase() === e.trim().toLowerCase())) {
+              officeRecipients.push(e.trim());
             }
           });
         }
-        // Remove RSA email from cc to avoid duplicate
-        const filteredCc = ccRecipients.filter(e => !rsaEmail || e.toLowerCase() !== rsaEmail.toLowerCase());
-        if (filteredCc.length > 0) {
+        // Remove RSA email from list to avoid duplicate
+        const filteredRecipients = officeRecipients.filter(e => !rsaEmail || e.toLowerCase() !== rsaEmail.toLowerCase());
+        if (filteredRecipients.length > 0) {
           await sgMail.send({
-            to: filteredCc,
+            to: filteredRecipients,
             from: emailFrom,
             subject: `${statusEmoji} ${request.request_type} Request ${status} - ${rsaName}`,
             html: emailHtml,
           });
-          console.log(`✅ Vacation review copy sent to: ${filteredCc.join(', ')}`);
+          console.log(`✅ Vacation review copy sent to: ${filteredRecipients.join(', ')}`);
         }
       }
     } catch (emailErr) {
       console.error('Email notification failed for vacation review:', emailErr.message);
+      if (emailErr.response) console.error('SendGrid response:', JSON.stringify(emailErr.response.body));
     }
     
     res.json(result.rows[0]);
