@@ -448,14 +448,46 @@ app.get('/api/test-email', requireRole('Admin'), async (req, res) => {
   try {
     const msg = {
       to: toEmail,
-      from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
+      from: { email: 'info@proassisting.net', name: 'Proassisting' },
       subject: 'Test Email from Surgical App',
       html: '<h2>Test Email</h2><p>If you received this, SendGrid is working correctly!</p>',
     };
     await sgMail.send(msg);
-    res.json({ success: true, message: `Test email sent to ${toEmail} from ${msg.from}` });
+    res.json({ success: true, message: `Test email sent to ${toEmail} from info@proassisting.net` });
   } catch (error) {
     res.json({ success: false, error: error.message, details: error.response ? error.response.body : null });
+  }
+});
+
+// Diagnostic: check email config and RSA email lookup
+app.get('/api/email-debug', requireRole('Admin', 'Business Assistant', 'Scheduler'), async (req, res) => {
+  try {
+    const hasSendGrid = !!process.env.SENDGRID_API_KEY;
+    const notifTo = process.env.NOTIFICATION_EMAIL_TO || '(not set)';
+    const notifFrom = process.env.NOTIFICATION_EMAIL_FROM || '(not set)';
+    
+    // List all rsa_emails
+    const rsaEmails = await pool.query('SELECT id, rsa_name, email FROM rsa_emails ORDER BY rsa_name');
+    
+    // List all users with roles
+    const users = await pool.query('SELECT id, username, fullname, role FROM users ORDER BY fullname');
+    
+    // Check which users have matching emails
+    const matches = [];
+    for (const u of users.rows) {
+      const emailRow = await pool.query('SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [u.fullname]);
+      matches.push({ user: u.fullname, role: u.role, emailFound: emailRow.rows[0]?.email || null });
+    }
+    
+    res.json({
+      sendgridConfigured: hasSendGrid,
+      notificationEmailTo: notifTo,
+      notificationEmailFrom: notifFrom,
+      rsaEmailsTable: rsaEmails.rows,
+      userEmailMatches: matches
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
