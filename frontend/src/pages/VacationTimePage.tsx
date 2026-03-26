@@ -229,8 +229,12 @@ const VacationTimePage: React.FC = () => {
     );
   }
 
-  const filteredEntries = filterUserId ? entries.filter(e => String(e.user_id) === filterUserId) : entries;
-  const usersWithoutProfile = users.filter(u => !profiles.some(p => String(p.user_id) === String(u.id)));
+  const myUserId = localStorage.getItem('userId');
+  const isScheduler = userRole === 'Scheduler';
+  const visibleEntries = isScheduler ? entries.filter(e => String(e.user_id) !== String(myUserId)) : entries;
+  const filteredEntries = filterUserId ? visibleEntries.filter(e => String(e.user_id) === filterUserId) : visibleEntries;
+  const visibleUsers = isScheduler ? users.filter(u => String(u.id) !== String(myUserId)) : users;
+  const usersWithoutProfile = visibleUsers.filter(u => !profiles.some(p => String(p.user_id) === String(u.id)));
 
   return (
     <div className="responsive-card" style={{ marginTop: 40, maxWidth: 1100, width: '100%' }}>
@@ -267,7 +271,7 @@ const VacationTimePage: React.FC = () => {
                   <label style={{ fontWeight: 600, fontSize: 13 }}>Employee *</label>
                   <select value={profileUserId} onChange={e => setProfileUserId(e.target.value)} style={inputStyle} disabled={!!editProfileId}>
                     <option value="">Select Employee...</option>
-                    {(editProfileId ? users : usersWithoutProfile).map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                    {(editProfileId ? visibleUsers : usersWithoutProfile).map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -321,8 +325,7 @@ const VacationTimePage: React.FC = () => {
                 <tbody>
                   {profiles.filter(p => {
                     // Scheduler cannot see their own vacation profile
-                    if (userRole === 'Scheduler') {
-                      const myUserId = localStorage.getItem('userId');
+                    if (isScheduler) {
                       return String(p.user_id) !== String(myUserId);
                     }
                     return true;
@@ -392,7 +395,7 @@ const VacationTimePage: React.FC = () => {
               <label style={{ fontWeight: 600, fontSize: 13 }}>Filter by Employee</label>
               <select value={filterUserId} onChange={e => setFilterUserId(e.target.value)} style={inputStyle}>
                 <option value="">All Employees</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                {visibleUsers.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
               </select>
             </div>
             <button onClick={() => { resetEntryForm(); setShowEntryForm(true); }} style={{ padding: '10px 24px', background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>
@@ -409,7 +412,7 @@ const VacationTimePage: React.FC = () => {
                   <label style={{ fontWeight: 600, fontSize: 13 }}>Employee *</label>
                   <select value={formUserId} onChange={e => setFormUserId(e.target.value)} style={inputStyle}>
                     <option value="">Select Employee...</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                    {visibleUsers.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: 180 }}>
