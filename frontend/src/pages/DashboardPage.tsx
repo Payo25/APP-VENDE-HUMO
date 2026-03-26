@@ -367,7 +367,7 @@ const DashboardPage: React.FC = () => {
             📊 My On-Call Hours
           </button>
         )}
-        {(localStorage.getItem('role') === 'Registered Surgical Assistant' || localStorage.getItem('role') === 'Team Leader') && (
+        {(localStorage.getItem('role') === 'Registered Surgical Assistant' || localStorage.getItem('role') === 'Team Leader' || localStorage.getItem('role') === 'Scheduler') && (
           <button
             onClick={() => navigate('/my-vacation')}
             style={{

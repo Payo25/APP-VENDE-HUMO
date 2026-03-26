@@ -1722,7 +1722,7 @@ app.get('/api/my-vacation', requireRole('Registered Surgical Assistant', 'Team L
 // ========== VACATION REQUESTS (RSA request + Scheduler approval) ==========
 
 // POST: RSA submits a vacation/PTO request
-app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 'Team Leader'), async (req, res) => {
+app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { request_type, request_date, hours, notes } = req.body;
@@ -1921,7 +1921,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
 });
 
 // DELETE: RSA can cancel their own pending request
-app.delete('/api/vacation-requests/:id', requireRole('Registered Surgical Assistant', 'Team Leader'), async (req, res) => {
+app.delete('/api/vacation-requests/:id', requireRole('Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query(
       'DELETE FROM vacation_requests WHERE id=$1 AND user_id=$2 AND status=$3 RETURNING *',
