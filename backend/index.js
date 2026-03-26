@@ -1727,15 +1727,20 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
         if (emailRow.rows[0]?.email) schedulerEmails.push(emailRow.rows[0].email);
       }
       
+      // Always include Info@proassisting.net for vacation request notifications
+      const businessEmail = 'Info@proassisting.net';
+      if (!schedulerEmails.some(e => e.toLowerCase() === businessEmail.toLowerCase())) {
+        schedulerEmails.push(businessEmail);
+      }
+      
       if (schedulerEmails.length > 0 && process.env.SENDGRID_API_KEY) {
-        // Send directly to scheduler/BA emails found in rsa_emails
         await sgMail.send({
           to: schedulerEmails,
           from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
           subject: emailSubject,
           html: emailHtml,
         });
-        console.log(`✅ Vacation request email sent to schedulers: ${schedulerEmails.join(', ')}`);
+        console.log(`✅ Vacation request email sent to: ${schedulerEmails.join(', ')}`);
       }
       // Also send to generic NOTIFICATION_EMAIL_TO as fallback
       await sendEmailNotification(emailSubject, emailHtml);
