@@ -115,7 +115,7 @@ const VacationTimePage: React.FC = () => {
   };
 
   const handleSaveEntry = async () => {
-    if (!formUserId || !formDate) { setError('Please select an RSA and date'); return; }
+    if (!formUserId || !formDate) { setError('Please select an Employee and date'); return; }
     setError(''); setSuccess('');
     const body = { user_id: Number(formUserId), vacation_date: formDate, hours: parseFloat(formHours) || 8, vacation_type: formType, notes: formNotes || null };
     let res;
@@ -156,7 +156,7 @@ const VacationTimePage: React.FC = () => {
   };
 
   const handleSaveProfile = async () => {
-    if (!profileUserId || !profileStartDate) { setError('Please select an RSA and start date'); return; }
+    if (!profileUserId || !profileStartDate) { setError('Please select an Employee and start date'); return; }
     setError(''); setSuccess('');
     const body = { user_id: Number(profileUserId), employment_start_date: profileStartDate, accrual_rate: parseFloat(profileRate) || 1.54, pto: parseFloat(profilePto) || 0, notes: profileNotes || null };
     let res;
@@ -251,7 +251,7 @@ const VacationTimePage: React.FC = () => {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <p style={{ margin: 0, color: '#666', fontSize: 14 }}>
-              Create a vacation profile for each RSA to set their employment start date and weekly accrual rate. Vacation hours accrue automatically each week.
+              Create a vacation profile for each Employee to set their employment start date and weekly accrual rate. Vacation hours accrue automatically each week.
             </p>
             <button onClick={() => { resetProfileForm(); setShowProfileForm(true); }} style={{ padding: '10px 24px', background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               + Create Profile
@@ -264,9 +264,9 @@ const VacationTimePage: React.FC = () => {
               <h3 style={{ marginTop: 0 }}>{editProfileId ? 'Edit Profile' : 'Create Vacation Profile'}</h3>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <label style={{ fontWeight: 600, fontSize: 13 }}>RSA *</label>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>Employee *</label>
                   <select value={profileUserId} onChange={e => setProfileUserId(e.target.value)} style={inputStyle} disabled={!!editProfileId}>
-                    <option value="">Select RSA...</option>
+                    <option value="">Select Employee...</option>
                     {(editProfileId ? users : usersWithoutProfile).map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                   </select>
                 </div>
@@ -304,7 +304,7 @@ const VacationTimePage: React.FC = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
                 <thead>
                   <tr style={{ background: '#f1f5f9' }}>
-                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>RSA</th>
+                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>Employee</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Start Date</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Rate (hrs/week)</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Weeks Worked</th>
@@ -389,9 +389,9 @@ const VacationTimePage: React.FC = () => {
           {/* Toolbar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16, gap: 16, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 200 }}>
-              <label style={{ fontWeight: 600, fontSize: 13 }}>Filter by RSA</label>
+              <label style={{ fontWeight: 600, fontSize: 13 }}>Filter by Employee</label>
               <select value={filterUserId} onChange={e => setFilterUserId(e.target.value)} style={inputStyle}>
-                <option value="">All RSAs</option>
+                <option value="">All Employees</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
               </select>
             </div>
@@ -406,9 +406,9 @@ const VacationTimePage: React.FC = () => {
               <h3 style={{ marginTop: 0 }}>{editEntryId ? 'Edit Vacation Entry' : 'Add Vacation Entry'}</h3>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={{ fontWeight: 600, fontSize: 13 }}>RSA *</label>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>Employee *</label>
                   <select value={formUserId} onChange={e => setFormUserId(e.target.value)} style={inputStyle}>
-                    <option value="">Select RSA...</option>
+                    <option value="">Select Employee...</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                   </select>
                 </div>
@@ -445,7 +445,7 @@ const VacationTimePage: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
               <thead>
                 <tr style={{ background: '#f1f5f9' }}>
-                  <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>RSA</th>
+                  <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>Employee</th>
                   <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>Date</th>
                   <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Hours</th>
                   <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'left' }}>Type</th>
