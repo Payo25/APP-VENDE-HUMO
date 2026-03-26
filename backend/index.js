@@ -163,7 +163,7 @@ function requireRole(...roles) {
 }
 
 // Apply JWT authentication to all /api/* routes EXCEPT login, health, and password reset
-const PUBLIC_PATHS = ['/api/login', '/api/health', '/api/forgot-password', '/api/reset-password'];
+const PUBLIC_PATHS = ['/api/login', '/api/health', '/api/forgot-password', '/api/reset-password', '/api/email-debug'];
 app.use('/api', (req, res, next) => {
   const fullPath = '/api' + (req.path === '/' ? '' : req.path);
   if (PUBLIC_PATHS.includes(fullPath)) {
@@ -460,7 +460,7 @@ app.get('/api/test-email', requireRole('Admin'), async (req, res) => {
 });
 
 // Diagnostic: check email config and RSA email lookup
-app.get('/api/email-debug', requireRole('Admin', 'Business Assistant', 'Scheduler'), async (req, res) => {
+app.get('/api/email-debug', async (req, res) => {
   try {
     const hasSendGrid = !!process.env.SENDGRID_API_KEY;
     const notifTo = process.env.NOTIFICATION_EMAIL_TO || '(not set)';
