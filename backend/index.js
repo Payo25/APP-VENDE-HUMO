@@ -163,7 +163,7 @@ function requireRole(...roles) {
 }
 
 // Apply JWT authentication to all /api/* routes EXCEPT login, health, and password reset
-const PUBLIC_PATHS = ['/api/login', '/api/health', '/api/forgot-password', '/api/reset-password', '/api/email-debug'];
+const PUBLIC_PATHS = ['/api/login', '/api/health', '/api/forgot-password', '/api/reset-password'];
 app.use('/api', (req, res, next) => {
   const fullPath = '/api' + (req.path === '/' ? '' : req.path);
   if (PUBLIC_PATHS.includes(fullPath)) {
@@ -460,7 +460,7 @@ app.get('/api/test-email', requireRole('Admin'), async (req, res) => {
 });
 
 // Diagnostic: check email config and RSA email lookup
-app.get('/api/email-debug', async (req, res) => {
+app.get('/api/email-debug', requireRole('Admin', 'Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     const hasSendGrid = !!process.env.SENDGRID_API_KEY;
     const notifTo = process.env.NOTIFICATION_EMAIL_TO || '(not set)';
@@ -475,7 +475,7 @@ app.get('/api/email-debug', async (req, res) => {
     // Check which users have matching emails
     const matches = [];
     for (const u of users.rows) {
-      const emailRow = await pool.query('SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [u.fullname]);
+      const emailRow = await pool.query('SELECT email FROM rsa_emails WHERE LOWER(TRIM(rsa_name)) = LOWER(TRIM($1))', [u.fullname]);
       matches.push({ user: u.fullname, role: u.role, emailFound: emailRow.rows[0]?.email || null });
     }
     
@@ -975,7 +975,7 @@ app.post('/api/forgot-password', loginLimiter, async (req, res) => {
 
     // Find email from rsa_emails table by matching fullname
     const emailResult = await pool.query(
-      'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)',
+      'SELECT email FROM rsa_emails WHERE LOWER(TRIM(rsa_name)) = LOWER(TRIM($1))',
       [user.fullname]
     );
     if (emailResult.rows.length === 0) {
@@ -1754,7 +1754,7 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
       const schedulerEmails = [];
       for (const su of schedulerUsers.rows) {
         const emailRow = await pool.query(
-          'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [su.fullname]
+          'SELECT email FROM rsa_emails WHERE LOWER(TRIM(rsa_name)) = LOWER(TRIM($1))', [su.fullname]
         );
         if (emailRow.rows[0]?.email) schedulerEmails.push(emailRow.rows[0].email);
       }
@@ -1857,7 +1857,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
       const reviewerName = reviewerResult.rows[0]?.fullname || 'Scheduler';
       // Look up RSA email from rsa_emails table
       const emailResult = await pool.query(
-        'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)', [rsaName]
+        'SELECT email FROM rsa_emails WHERE LOWER(TRIM(rsa_name)) = LOWER(TRIM($1))', [rsaName]
       );
       const rsaEmail = emailResult.rows[0]?.email;
       const statusEmoji = status === 'Approved' ? '✅' : '❌';
@@ -2129,7 +2129,7 @@ async function checkAndSendReminders(dryRun = false) {
       if (scheduleMinutes > currentMinutes && scheduleMinutes <= reminderWindowEnd) {
         // Look up email from rsa_emails table
         const emailResult = await pool.query(
-          'SELECT email FROM rsa_emails WHERE LOWER(rsa_name) = LOWER($1)',
+          'SELECT email FROM rsa_emails WHERE LOWER(TRIM(rsa_name)) = LOWER(TRIM($1))',
           [schedule.fullname]
         );
 
