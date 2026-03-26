@@ -459,8 +459,8 @@ app.get('/api/test-email', requireRole('Admin'), async (req, res) => {
   }
 });
 
-// Diagnostic: check email config and RSA email lookup
-app.get('/api/email-debug', requireRole('Admin', 'Business Assistant', 'Scheduler'), async (req, res) => {
+// Diagnostic: check email config and RSA email lookup (Admin only)
+app.get('/api/email-debug', requireRole('Admin'), async (req, res) => {
   try {
     const hasSendGrid = !!process.env.SENDGRID_API_KEY;
     const notifTo = process.env.NOTIFICATION_EMAIL_TO || '(not set)';
@@ -870,8 +870,8 @@ app.delete('/api/users/:id', requireRole('Admin'), async (req, res) => {
   }
 });
 
-// --- Password change endpoint ---
-app.put('/api/users/:id/password', requireRole('Admin'), async (req, res) => {
+// --- Password change endpoint (rate-limited) ---
+app.put('/api/users/:id/password', loginLimiter, requireRole('Admin'), async (req, res) => {
   const userId = req.params.id;
   const { password } = req.body;
   if (!password) {
@@ -1727,6 +1727,11 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
     const userId = req.user.id;
     const { request_type, request_date, hours, notes } = req.body;
     if (!request_date) return res.status(400).json({ error: 'request_date is required' });
+    // Validate input
+    if (request_type && !['Vacation', 'PTO'].includes(request_type)) return res.status(400).json({ error: 'request_type must be Vacation or PTO' });
+    if (hours && (isNaN(Number(hours)) || Number(hours) < 1 || Number(hours) > 24)) return res.status(400).json({ error: 'hours must be between 1 and 24' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(request_date)) return res.status(400).json({ error: 'request_date must be YYYY-MM-DD format' });
+    if (notes && typeof notes === 'string' && notes.length > 500) return res.status(400).json({ error: 'notes must be 500 characters or less' });
     const result = await pool.query(
       `INSERT INTO vacation_requests (user_id, request_type, request_date, hours, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [userId, request_type || 'Vacation', request_date, hours || 8, notes || null]
@@ -1736,16 +1741,16 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
       const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [userId]);
       const rsaName = userResult.rows[0]?.fullname || req.user.username;
       const appUrl = process.env.APP_URL || 'https://surgical-backend-new-djb2b3ezgghsdnft.centralus-01.azurewebsites.net';
-      const emailHtml = `<h2>New ${request_type || 'Vacation'} Request</h2>
-         <p><strong>RSA:</strong> ${rsaName}</p>
-         <p><strong>Type:</strong> ${request_type || 'Vacation'}</p>
-         <p><strong>Date:</strong> ${request_date}</p>
-         <p><strong>Hours:</strong> ${hours || 8}</p>
-         ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ''}
+      const emailHtml = `<h2>New ${escapeHtml(request_type || 'Vacation')} Request</h2>
+         <p><strong>RSA:</strong> ${escapeHtml(rsaName)}</p>
+         <p><strong>Type:</strong> ${escapeHtml(request_type || 'Vacation')}</p>
+         <p><strong>Date:</strong> ${escapeHtml(request_date)}</p>
+         <p><strong>Hours:</strong> ${escapeHtml(String(hours || 8))}</p>
+         ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ''}
          <p><strong>Status:</strong> Pending</p>
          <br/>
          <p><a href="${appUrl}/vacation-requests" style="background:#667eea;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Review Request</a></p>`;
-      const emailSubject = `🏖️ New ${request_type || 'Vacation'} Request from ${rsaName}`;
+      const emailSubject = `🏖️ New ${escapeHtml(request_type || 'Vacation')} Request from ${escapeHtml(rsaName)}`;
       
       // Look up Scheduler and BA emails from rsa_emails table (matched by name from users table)
       const schedulerUsers = await pool.query(
@@ -1865,14 +1870,14 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
       const statusEmoji = status === 'Approved' ? '✅' : '❌';
       const statusColor = status === 'Approved' ? '#15803d' : '#dc2626';
       const emailFrom = { email: 'info@proassisting.net', name: 'Proassisting' };
-      const emailHtml = `<h2>${statusEmoji} ${request.request_type} Request ${status}</h2>
-        <p>Hi ${rsaName},</p>
-        <p>Your <strong>${request.request_type}</strong> request has been <strong style="color:${statusColor}">${status}</strong> by ${reviewerName}.</p>
-        <p><strong>Date:</strong> ${request.request_date}</p>
-        <p><strong>Hours:</strong> ${request.hours}</p>
-        ${review_notes ? `<p><strong>Notes:</strong> ${review_notes}</p>` : ''}
+      const emailHtml = `<h2>${statusEmoji} ${escapeHtml(request.request_type)} Request ${escapeHtml(status)}</h2>
+        <p>Hi ${escapeHtml(rsaName)},</p>
+        <p>Your <strong>${escapeHtml(request.request_type)}</strong> request has been <strong style="color:${statusColor}">${escapeHtml(status)}</strong> by ${escapeHtml(reviewerName)}.</p>
+        <p><strong>Date:</strong> ${escapeHtml(String(request.request_date))}</p>
+        <p><strong>Hours:</strong> ${escapeHtml(String(request.hours))}</p>
+        ${review_notes ? `<p><strong>Notes:</strong> ${escapeHtml(review_notes)}</p>` : ''}
         ${status === 'Approved' ? '<p style="color:#15803d;font-weight:600;">The hours have been added to your vacation/PTO record.</p>' : ''}`;
-      const emailSubject = `${statusEmoji} Your ${request.request_type} Request has been ${status}`;
+      const emailSubject = `${statusEmoji} Your ${escapeHtml(request.request_type)} Request has been ${escapeHtml(status)}`;
       console.log(`📧 Attempting vacation review email: RSA=${rsaName}, rsaEmail=${rsaEmail}, status=${status}`);
       // Send to RSA directly if we have their email
       if (rsaEmail && process.env.SENDGRID_API_KEY) {
@@ -1902,7 +1907,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
           await sgMail.send({
             to: filteredRecipients,
             from: emailFrom,
-            subject: `${statusEmoji} ${request.request_type} Request ${status} - ${rsaName}`,
+            subject: `${statusEmoji} ${escapeHtml(request.request_type)} Request ${escapeHtml(status)} - ${escapeHtml(rsaName)}`,
             html: emailHtml,
           });
           console.log(`✅ Vacation review copy sent to: ${filteredRecipients.join(', ')}`);
