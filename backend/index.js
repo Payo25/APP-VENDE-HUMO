@@ -1759,10 +1759,12 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
         if (emailRow.rows[0]?.email) schedulerEmails.push(emailRow.rows[0].email);
       }
       
-      // Always include Info@proassisting.net for vacation request notifications
-      const businessEmail = 'Info@proassisting.net';
-      if (!schedulerEmails.some(e => e.toLowerCase() === businessEmail.toLowerCase())) {
-        schedulerEmails.push(businessEmail);
+      // Always include info@proassisting.net and adminoffice@proassisting.net for vacation request notifications
+      const alwaysNotify = ['info@proassisting.net', 'adminoffice@proassisting.net'];
+      for (const addr of alwaysNotify) {
+        if (!schedulerEmails.some(e => e.toLowerCase() === addr.toLowerCase())) {
+          schedulerEmails.push(addr);
+        }
       }
       
       if (schedulerEmails.length > 0 && process.env.SENDGRID_API_KEY) {
@@ -1884,9 +1886,9 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
       } else {
         console.log(`⚠️ RSA email not sent: rsaEmail=${rsaEmail}, SENDGRID_KEY=${!!process.env.SENDGRID_API_KEY}`);
       }
-      // Also send copy to info@proassisting.net
+      // Also send copy to info@proassisting.net and adminoffice@proassisting.net
       if (process.env.SENDGRID_API_KEY) {
-        const officeRecipients = ['info@proassisting.net'];
+        const officeRecipients = ['info@proassisting.net', 'adminoffice@proassisting.net'];
         if (process.env.NOTIFICATION_EMAIL_TO) {
           process.env.NOTIFICATION_EMAIL_TO.split(',').forEach(e => {
             if (e.trim() && !officeRecipients.some(r => r.toLowerCase() === e.trim().toLowerCase())) {
