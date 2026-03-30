@@ -88,6 +88,12 @@ const VacationTimePage: React.FC = () => {
   const [showEffectiveDateModal, setShowEffectiveDateModal] = useState(false);
   const [effectiveDate, setEffectiveDate] = useState('');
   const [pendingInlineEdit, setPendingInlineEdit] = useState<VacationProfile | null>(null);
+
+  // Rate change inline edit state
+  const [rcEditId, setRcEditId] = useState<number | null>(null);
+  const [rcOldRate, setRcOldRate] = useState('');
+  const [rcNewRate, setRcNewRate] = useState('');
+  const [rcEffDate, setRcEffDate] = useState('');
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Team Leader' && userRole !== 'Scheduler') return;
     Promise.all([
@@ -228,6 +234,32 @@ const VacationTimePage: React.FC = () => {
     setShowEffectiveDateModal(false);
     setPendingInlineEdit(null);
     setEffectiveDate('');
+  };
+
+  // Rate change inline edit helpers
+  const startRcEdit = (rc: RateChange) => {
+    setRcEditId(rc.id);
+    setRcOldRate(String(rc.old_rate));
+    setRcNewRate(String(rc.new_rate));
+    setRcEffDate(rc.effective_date?.split('T')[0] || '');
+  };
+
+  const cancelRcEdit = () => setRcEditId(null);
+
+  const saveRcEdit = async (rc: RateChange) => {
+    setError(''); setSuccess('');
+    const body = { old_rate: parseFloat(rcOldRate) || 0, new_rate: parseFloat(rcNewRate) || 0, effective_date: rcEffDate };
+    const res = await authFetch(`${API_BASE_URL}/rate-changes/${rc.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) { setRcEditId(null); await fetchProfiles(); setSuccess('Rate change updated!'); }
+    else { const data = await res.json().catch(() => ({})); setError(data.error || 'Failed to update rate change'); }
+  };
+
+  const deleteRcEntry = async (id: number) => {
+    if (!window.confirm('Delete this rate change? The profile accrual rate will be reverted.')) return;
+    setError(''); setSuccess('');
+    const res = await authFetch(`${API_BASE_URL}/rate-changes/${id}`, { method: 'DELETE' });
+    if (res.ok) { await fetchProfiles(); setSuccess('Rate change deleted!'); }
+    else { const data = await res.json().catch(() => ({})); setError(data.error || 'Failed to delete rate change'); }
   };
 
   const handleDeleteProfile = async (id: number) => {
@@ -494,18 +526,43 @@ const VacationTimePage: React.FC = () => {
                       <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>New Rate</th>
                       <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>Effective Date</th>
                       <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'left' }}>Changed By</th>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rateChanges.map(rc => {
                       const prof = profiles.find(p => String(p.user_id) === String(rc.user_id));
+                      const isRcEditing = rcEditId === rc.id;
+                      const rcInput: React.CSSProperties = { padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13, width: '100%', boxSizing: 'border-box' };
                       return (
                         <tr key={rc.id}>
                           <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{prof?.user_name || `User #${rc.user_id}`}</td>
-                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>{rc.old_rate} hrs/wk</td>
-                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>{rc.new_rate} hrs/wk</td>
-                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>{rc.effective_date?.split('T')[0]}</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                            {isRcEditing ? <input type="number" step="0.01" min="0" value={rcOldRate} onChange={e => setRcOldRate(e.target.value)} style={{ ...rcInput, width: 70 }} />
+                              : `${rc.old_rate} hrs/wk`}
+                          </td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>
+                            {isRcEditing ? <input type="number" step="0.01" min="0" value={rcNewRate} onChange={e => setRcNewRate(e.target.value)} style={{ ...rcInput, width: 70 }} />
+                              : `${rc.new_rate} hrs/wk`}
+                          </td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                            {isRcEditing ? <input type="date" value={rcEffDate} onChange={e => setRcEffDate(e.target.value)} style={rcInput} />
+                              : rc.effective_date?.split('T')[0]}
+                          </td>
                           <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{rc.changed_by_name || '-'}</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {isRcEditing ? (
+                              <>
+                                <button onClick={() => saveRcEdit(rc)} style={{ padding: '4px 10px', marginRight: 4, background: '#15803d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Save</button>
+                                <button onClick={cancelRcEdit} style={{ padding: '4px 10px', background: '#94a3b8', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => startRcEdit(rc)} style={{ padding: '4px 10px', marginRight: 4, background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Edit</button>
+                                <button onClick={() => deleteRcEntry(rc.id)} style={{ padding: '4px 10px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Delete</button>
+                              </>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}

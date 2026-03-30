@@ -2041,6 +2041,51 @@ app.get('/api/rate-changes', requireRole('Business Assistant', 'Team Leader', 'S
   }
 });
 
+// PUT update a rate change
+app.put('/api/rate-changes/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const { old_rate, new_rate, effective_date } = req.body;
+    if (!effective_date || !/^\d{4}-\d{2}-\d{2}$/.test(effective_date)) return res.status(400).json({ error: 'effective_date (YYYY-MM-DD) is required' });
+    if (new_rate === undefined || new_rate === null || isNaN(Number(new_rate))) return res.status(400).json({ error: 'new_rate is required' });
+    const result = await pool.query(
+      `UPDATE rate_changes SET old_rate=COALESCE($1,old_rate), new_rate=$2, effective_date=$3 WHERE id=$4 RETURNING *`,
+      [old_rate !== undefined ? old_rate : null, new_rate, effective_date, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    // Also update the vacation_profiles accrual_rate to match the latest rate change for this user
+    const userId = result.rows[0].user_id;
+    const latest = await pool.query(`SELECT new_rate FROM rate_changes WHERE user_id=$1 ORDER BY effective_date DESC LIMIT 1`, [userId]);
+    if (latest.rows.length > 0) {
+      await pool.query(`UPDATE vacation_profiles SET accrual_rate=$1, lastmodified=CURRENT_TIMESTAMP WHERE user_id=$2`, [latest.rows[0].new_rate, userId]);
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating rate change:', err.message);
+    res.status(500).json({ error: 'Failed to update rate change' });
+  }
+});
+
+// DELETE a rate change
+app.delete('/api/rate-changes/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM rate_changes WHERE id=$1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    // Update vacation_profiles accrual_rate to match the latest remaining rate change (or revert to old_rate if none left)
+    const userId = result.rows[0].user_id;
+    const latest = await pool.query(`SELECT new_rate FROM rate_changes WHERE user_id=$1 ORDER BY effective_date DESC LIMIT 1`, [userId]);
+    if (latest.rows.length > 0) {
+      await pool.query(`UPDATE vacation_profiles SET accrual_rate=$1, lastmodified=CURRENT_TIMESTAMP WHERE user_id=$2`, [latest.rows[0].new_rate, userId]);
+    } else {
+      // No more rate changes, revert to the deleted entry's old_rate
+      await pool.query(`UPDATE vacation_profiles SET accrual_rate=$1, lastmodified=CURRENT_TIMESTAMP WHERE user_id=$2`, [result.rows[0].old_rate, userId]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting rate change:', err.message);
+    res.status(500).json({ error: 'Failed to delete rate change' });
+  }
+});
+
 // DELETE vacation profile
 app.delete('/api/vacation-profiles/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
