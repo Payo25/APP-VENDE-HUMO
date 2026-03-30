@@ -31,6 +31,16 @@ interface User {
   hourlyRate?: number;
 }
 
+interface RateChange {
+  id: number;
+  user_id: number;
+  old_rate: number;
+  new_rate: number;
+  effective_date: string;
+  changed_by_name: string | null;
+  createdat: string;
+}
+
 const VACATION_TYPES = ['Vacation', 'PTO', 'Sick', 'Personal Day', 'Holiday'];
 
 const VacationTimePage: React.FC = () => {
@@ -73,16 +83,23 @@ const VacationTimePage: React.FC = () => {
   const [inlinePto, setInlinePto] = useState('');
   const [inlineNotes, setInlineNotes] = useState('');
 
+  // Rate changes state
+  const [rateChanges, setRateChanges] = useState<RateChange[]>([]);
+  const [showEffectiveDateModal, setShowEffectiveDateModal] = useState(false);
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [pendingInlineEdit, setPendingInlineEdit] = useState<VacationProfile | null>(null);
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Team Leader' && userRole !== 'Scheduler') return;
     Promise.all([
       authFetch(`${API_BASE_URL}/vacation-time`).then(res => res.ok ? res.json() : []),
       authFetch(`${API_BASE_URL}/vacation-profiles`).then(res => res.ok ? res.json() : []),
-      authFetch(`${API_BASE_URL}/users`).then(res => res.ok ? res.json() : [])
-    ]).then(([vacData, profData, usersData]) => {
+      authFetch(`${API_BASE_URL}/users`).then(res => res.ok ? res.json() : []),
+      authFetch(`${API_BASE_URL}/rate-changes`).then(res => res.ok ? res.json() : [])
+    ]).then(([vacData, profData, usersData, rcData]) => {
       setEntries(vacData);
       setProfiles(profData);
       setUsers(usersData.filter((u: User) => u.role === 'Registered Surgical Assistant' || u.role === 'Team Leader' || u.role === 'Scheduler'));
+      setRateChanges(rcData);
       setLoading(false);
     }).catch(() => {
       setError('Failed to load data');
@@ -101,6 +118,8 @@ const VacationTimePage: React.FC = () => {
   const fetchProfiles = async () => {
     const res = await authFetch(`${API_BASE_URL}/vacation-profiles`);
     if (res.ok) setProfiles(await res.json());
+    const rcRes = await authFetch(`${API_BASE_URL}/rate-changes`);
+    if (rcRes.ok) setRateChanges(await rcRes.json());
   };
 
   // --- Entry form ---
@@ -180,11 +199,35 @@ const VacationTimePage: React.FC = () => {
   const cancelInlineEdit = () => setInlineEditId(null);
 
   const saveInlineEdit = async (p: VacationProfile) => {
+    const newRate = parseFloat(inlineRate) || 0;
+    const oldRate = p.accrual_rate;
+    // If rate changed, prompt for effective date via modal
+    if (Math.abs(newRate - oldRate) > 0.001) {
+      setPendingInlineEdit(p);
+      setEffectiveDate(new Date().toISOString().split('T')[0]);
+      setShowEffectiveDateModal(true);
+      return;
+    }
+    await doSaveInlineEdit(p);
+  };
+
+  const doSaveInlineEdit = async (p: VacationProfile, rateDateOverride?: string) => {
     setError(''); setSuccess('');
-    const body = { user_id: p.user_id, employment_start_date: inlineStartDate, accrual_rate: parseFloat(inlineRate) || 0, pto: parseFloat(inlinePto) || 0, notes: inlineNotes || null };
+    const body: any = { user_id: p.user_id, employment_start_date: inlineStartDate, accrual_rate: parseFloat(inlineRate) || 0, pto: parseFloat(inlinePto) || 0, notes: inlineNotes || null };
+    if (rateDateOverride) {
+      body.rate_effective_date = rateDateOverride;
+    }
     const res = await authFetch(`${API_BASE_URL}/vacation-profiles/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) { setInlineEditId(null); await fetchProfiles(); setSuccess('Profile updated!'); }
     else { const data = await res.json().catch(() => ({})); setError(data.error || 'Failed to save'); }
+  };
+
+  const confirmEffectiveDate = async () => {
+    if (!pendingInlineEdit || !effectiveDate) return;
+    await doSaveInlineEdit(pendingInlineEdit, effectiveDate);
+    setShowEffectiveDateModal(false);
+    setPendingInlineEdit(null);
+    setEffectiveDate('');
   };
 
   const handleDeleteProfile = async (id: number) => {
@@ -193,7 +236,7 @@ const VacationTimePage: React.FC = () => {
     if (res.ok) { await fetchProfiles(); setSuccess('Profile deleted'); }
   };
 
-  // Compute vacation and PTO balances separately
+  // Compute vacation and PTO balances separately (segmented by rate changes)
   const getBalance = (profile: VacationProfile) => {
     const today = new Date();
     const start = new Date(profile.employment_start_date + 'T00:00:00');
@@ -201,7 +244,44 @@ const VacationTimePage: React.FC = () => {
     const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / 86400000);
     if (daysSinceStart < 0) return { periodsWorked: 0, hoursEarned: 0, vacationUsed: 0, vacationBalance: 0, ptoAllocation: 0, ptoUsed: 0, ptoBalance: 0 };
     const periodsWorked = Math.floor(daysSinceStart / 7);
-    const hoursEarned = Number((periodsWorked * profile.accrual_rate).toFixed(2));
+
+    // Get rate changes for this user, sorted by effective_date ascending
+    const userRateChanges = rateChanges
+      .filter(rc => String(rc.user_id) === String(profile.user_id))
+      .sort((a, b) => a.effective_date.localeCompare(b.effective_date));
+
+    let hoursEarned = 0;
+    if (userRateChanges.length === 0) {
+      // No rate changes: simple calculation
+      hoursEarned = periodsWorked * profile.accrual_rate;
+    } else {
+      // Build rate segments: start_date → first_change, first_change → second_change, ..., last_change → today
+      // Find the original rate (the old_rate of the first change, or the initial accrual_rate if no changes before employment)
+      const segments: { from: Date; to: Date; rate: number }[] = [];
+      let segStart = start;
+      let segRate = userRateChanges[0].old_rate ?? profile.accrual_rate;
+
+      for (const rc of userRateChanges) {
+        const changeDate = new Date(rc.effective_date + 'T00:00:00');
+        if (changeDate > segStart) {
+          segments.push({ from: segStart, to: changeDate, rate: Number(segRate) });
+        }
+        segStart = changeDate;
+        segRate = rc.new_rate;
+      }
+      // Last segment: from last change to today
+      if (today > segStart) {
+        segments.push({ from: segStart, to: today, rate: Number(segRate) });
+      }
+
+      for (const seg of segments) {
+        const segDays = Math.floor((seg.to.getTime() - seg.from.getTime()) / 86400000);
+        const segWeeks = Math.floor(segDays / 7);
+        hoursEarned += segWeeks * seg.rate;
+      }
+    }
+
+    hoursEarned = Number(hoursEarned.toFixed(2));
     const userEntries = entries.filter(e => String(e.user_id) === String(profile.user_id));
     const vacationUsed = Number(userEntries.filter(e => e.vacation_type !== 'PTO').reduce((sum, e) => sum + (parseFloat(String(e.hours)) || 0), 0).toFixed(2));
     const ptoUsed = Number(userEntries.filter(e => e.vacation_type === 'PTO').reduce((sum, e) => sum + (parseFloat(String(e.hours)) || 0), 0).toFixed(2));
@@ -383,6 +463,58 @@ const VacationTimePage: React.FC = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Rate Change History */}
+          {rateChanges.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ marginBottom: 12, color: '#4338ca' }}>📊 Rate Change History</h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                  <thead>
+                    <tr style={{ background: '#f0f4ff' }}>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'left' }}>Employee</th>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>Old Rate</th>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>New Rate</th>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>Effective Date</th>
+                      <th style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'left' }}>Changed By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rateChanges.map(rc => {
+                      const prof = profiles.find(p => String(p.user_id) === String(rc.user_id));
+                      return (
+                        <tr key={rc.id}>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{prof?.user_name || `User #${rc.user_id}`}</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>{rc.old_rate} hrs/wk</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 600 }}>{rc.new_rate} hrs/wk</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0', textAlign: 'center' }}>{rc.effective_date?.split('T')[0]}</td>
+                          <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{rc.changed_by_name || '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Effective Date Modal */}
+          {showEffectiveDateModal && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: 400, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+                <h3 style={{ margin: '0 0 16px 0', color: '#4338ca' }}>📅 Rate Change Effective Date</h3>
+                <p style={{ color: '#555', fontSize: 14, margin: '0 0 16px 0' }}>
+                  You are changing the accrual rate from <strong>{pendingInlineEdit?.accrual_rate} hrs/wk</strong> to <strong>{inlineRate} hrs/wk</strong>.
+                  <br />Please enter the date from which the new rate should take effect:
+                </p>
+                <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box', marginBottom: 16 }} />
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowEffectiveDateModal(false); setPendingInlineEdit(null); setEffectiveDate(''); }} style={{ padding: '10px 24px', background: '#e2e8f0', color: '#333', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={confirmEffectiveDate} disabled={!effectiveDate} style={{ padding: '10px 24px', background: effectiveDate ? '#15803d' : '#94a3b8', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>Confirm & Save</button>
+                </div>
+              </div>
             </div>
           )}
         </>

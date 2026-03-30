@@ -36,6 +36,14 @@ interface VacationRequest {
   created_at: string;
 }
 
+interface RateChange {
+  id: number;
+  user_id: number;
+  old_rate: number;
+  new_rate: number;
+  effective_date: string;
+}
+
 const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const getDaysInMonth = (m: number, y: number) => new Date(y, m, 0).getDate();
 const getDateString = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -45,6 +53,7 @@ const MyVacationPage: React.FC = () => {
   const userFullName = localStorage.getItem('fullName');
   const [profile, setProfile] = useState<VacationProfile | null>(null);
   const [entries, setEntries] = useState<VacationEntry[]>([]);
+  const [rateChanges, setRateChanges] = useState<RateChange[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Vacation request state
@@ -61,10 +70,11 @@ const MyVacationPage: React.FC = () => {
 
   useEffect(() => {
     authFetch(`${API_BASE_URL}/my-vacation`)
-      .then(res => res.ok ? res.json() : { profile: null, entries: [] })
+      .then(res => res.ok ? res.json() : { profile: null, entries: [], rateChanges: [] })
       .then(data => {
         setProfile(data.profile);
         setEntries(data.entries);
+        setRateChanges(data.rateChanges || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -125,7 +135,40 @@ const MyVacationPage: React.FC = () => {
     const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / 86400000);
     if (daysSinceStart < 0) return { weeksWorked: 0, hoursEarned: 0, vacUsed: 0, vacRemaining: 0 };
     const weeksWorked = Math.floor(daysSinceStart / 7);
-    const hoursEarned = Number((weeksWorked * profile.accrual_rate).toFixed(2));
+
+    // Segmented rate calculation using rate changes
+    const userRateChanges = rateChanges
+      .filter(rc => String(rc.user_id) === String(profile.user_id))
+      .sort((a, b) => a.effective_date.localeCompare(b.effective_date));
+
+    let hoursEarned = 0;
+    if (userRateChanges.length === 0) {
+      hoursEarned = weeksWorked * profile.accrual_rate;
+    } else {
+      const segments: { from: Date; to: Date; rate: number }[] = [];
+      let segStart = start;
+      let segRate = userRateChanges[0].old_rate ?? profile.accrual_rate;
+
+      for (const rc of userRateChanges) {
+        const changeDate = new Date(rc.effective_date + 'T00:00:00');
+        if (changeDate > segStart) {
+          segments.push({ from: segStart, to: changeDate, rate: Number(segRate) });
+        }
+        segStart = changeDate;
+        segRate = rc.new_rate;
+      }
+      if (today > segStart) {
+        segments.push({ from: segStart, to: today, rate: Number(segRate) });
+      }
+
+      for (const seg of segments) {
+        const segDays = Math.floor((seg.to.getTime() - seg.from.getTime()) / 86400000);
+        const segWeeks = Math.floor(segDays / 7);
+        hoursEarned += segWeeks * seg.rate;
+      }
+    }
+
+    hoursEarned = Number(hoursEarned.toFixed(2));
     const vacUsed = entries
       .filter(e => e.vacation_type === 'Vacation')
       .reduce((sum, e) => sum + (parseFloat(String(e.hours)) || 0), 0);

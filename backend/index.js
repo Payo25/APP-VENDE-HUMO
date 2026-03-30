@@ -314,6 +314,19 @@ async function migrateDatabase() {
       ALTER TABLE vacation_profiles ADD COLUMN IF NOT EXISTS pto DECIMAL(5,2) DEFAULT 0;
     `);
 
+    // Create rate_changes table for tracking accrual rate changes with effective dates
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rate_changes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        old_rate DECIMAL(5,2),
+        new_rate DECIMAL(5,2) NOT NULL,
+        effective_date DATE NOT NULL,
+        changed_by INTEGER REFERENCES users(id),
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create invoices table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoices (
@@ -1706,13 +1719,15 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
 app.get('/api/my-vacation', requireRole('Registered Surgical Assistant', 'Team Leader', 'Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     const userId = req.user.id;
-    const [profileResult, entriesResult] = await Promise.all([
+    const [profileResult, entriesResult, rateChangesResult] = await Promise.all([
       pool.query(`SELECT vp.*, u.fullname as user_name FROM vacation_profiles vp JOIN users u ON vp.user_id = u.id WHERE vp.user_id = $1`, [userId]),
-      pool.query(`SELECT * FROM vacation_time WHERE user_id = $1 ORDER BY vacation_date DESC`, [userId])
+      pool.query(`SELECT * FROM vacation_time WHERE user_id = $1 ORDER BY vacation_date DESC`, [userId]),
+      pool.query(`SELECT * FROM rate_changes WHERE user_id = $1 ORDER BY effective_date ASC`, [userId])
     ]);
     const profile = profileResult.rows[0] || null;
     const entries = entriesResult.rows;
-    res.json({ profile, entries });
+    const rateChanges = rateChangesResult.rows;
+    res.json({ profile, entries, rateChanges });
   } catch (err) {
     console.error('Error fetching my vacation data:', err.message);
     res.status(500).json({ error: 'Failed to fetch vacation data' });
@@ -1979,16 +1994,50 @@ app.post('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leade
 // PUT update vacation profile
 app.put('/api/vacation-profiles/:id', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
-    const { employment_start_date, accrual_rate, vacation_hourly_rate, pto, notes } = req.body;
+    const { employment_start_date, accrual_rate, vacation_hourly_rate, pto, notes, rate_effective_date } = req.body;
+    // Check if rate is changing
+    const existing = await pool.query('SELECT * FROM vacation_profiles WHERE id=$1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const oldProfile = existing.rows[0];
+    const newRate = accrual_rate !== undefined && accrual_rate !== null ? parseFloat(accrual_rate) : oldProfile.accrual_rate;
+    const oldRate = parseFloat(oldProfile.accrual_rate);
+    // If rate changed, require effective date and log the change
+    if (Math.abs(newRate - oldRate) > 0.001) {
+      if (!rate_effective_date || !/^\d{4}-\d{2}-\d{2}$/.test(rate_effective_date)) {
+        return res.status(400).json({ error: 'rate_effective_date (YYYY-MM-DD) is required when changing accrual rate' });
+      }
+      await pool.query(
+        `INSERT INTO rate_changes (user_id, old_rate, new_rate, effective_date, changed_by) VALUES ($1, $2, $3, $4, $5)`,
+        [oldProfile.user_id, oldRate, newRate, rate_effective_date, req.user.id]
+      );
+    }
     const result = await pool.query(
       `UPDATE vacation_profiles SET employment_start_date=COALESCE($1,employment_start_date), accrual_rate=COALESCE($2,accrual_rate), vacation_hourly_rate=$3, pto=COALESCE($4,pto), notes=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *`,
       [employment_start_date, accrual_rate, vacation_hourly_rate !== undefined ? vacation_hourly_rate : null, pto !== undefined ? pto : 0, notes !== undefined ? notes : null, req.params.id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating vacation profile:', err.message);
     res.status(500).json({ error: 'Failed to update vacation profile' });
+  }
+});
+
+// GET rate changes for a user
+app.get('/api/rate-changes', requireRole('Business Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    let query = `SELECT rc.*, u.fullname as changed_by_name FROM rate_changes rc LEFT JOIN users u ON rc.changed_by = u.id`;
+    const params = [];
+    if (user_id) {
+      query += ` WHERE rc.user_id = $1`;
+      params.push(user_id);
+    }
+    query += ` ORDER BY rc.effective_date ASC`;
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching rate changes:', err.message);
+    res.status(500).json({ error: 'Failed to fetch rate changes' });
   }
 });
 
