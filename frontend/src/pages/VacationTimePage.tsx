@@ -275,7 +275,9 @@ const VacationTimePage: React.FC = () => {
       }
 
       for (const seg of segments) {
-        const segDays = Math.floor((seg.to.getTime() - seg.from.getTime()) / 86400000);
+        const segTo = seg.to > today ? today : seg.to;
+        if (segTo <= seg.from) continue;
+        const segDays = Math.floor((segTo.getTime() - seg.from.getTime()) / 86400000);
         const segWeeks = Math.floor(segDays / 7);
         hoursEarned += segWeeks * seg.rate;
       }
