@@ -242,7 +242,7 @@ const VacationTimePage: React.FC = () => {
     const start = new Date(profile.employment_start_date + 'T00:00:00');
     if (isNaN(start.getTime())) return null;
     const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / 86400000);
-    if (daysSinceStart < 0) return { periodsWorked: 0, hoursEarned: 0, vacationUsed: 0, vacationBalance: 0, ptoAllocation: 0, ptoUsed: 0, ptoBalance: 0 };
+    if (daysSinceStart < 0) return { periodsWorked: 0, hoursEarned: 0, vacationUsed: 0, vacationBalance: 0, ptoAllocation: 0, ptoUsed: 0, ptoBalance: 0, accrualBreakdown: [] as { weeks: number; rate: number; hours: number }[] };
     const periodsWorked = Math.floor(daysSinceStart / 7);
 
     // Get rate changes for this user, sorted by effective_date ascending
@@ -251,12 +251,13 @@ const VacationTimePage: React.FC = () => {
       .sort((a, b) => a.effective_date.localeCompare(b.effective_date));
 
     let hoursEarned = 0;
+    const accrualBreakdown: { weeks: number; rate: number; hours: number }[] = [];
     if (userRateChanges.length === 0) {
       // No rate changes: simple calculation
       hoursEarned = periodsWorked * profile.accrual_rate;
+      accrualBreakdown.push({ weeks: periodsWorked, rate: profile.accrual_rate, hours: Number(hoursEarned.toFixed(2)) });
     } else {
       // Build rate segments: start_date → first_change, first_change → second_change, ..., last_change → today
-      // Find the original rate (the old_rate of the first change, or the initial accrual_rate if no changes before employment)
       const segments: { from: Date; to: Date; rate: number }[] = [];
       let segStart = start;
       let segRate = userRateChanges[0].old_rate ?? profile.accrual_rate;
@@ -279,7 +280,9 @@ const VacationTimePage: React.FC = () => {
         if (segTo <= seg.from) continue;
         const segDays = Math.floor((segTo.getTime() - seg.from.getTime()) / 86400000);
         const segWeeks = Math.floor(segDays / 7);
-        hoursEarned += segWeeks * seg.rate;
+        const segHours = Number((segWeeks * seg.rate).toFixed(2));
+        hoursEarned += segHours;
+        accrualBreakdown.push({ weeks: segWeeks, rate: seg.rate, hours: segHours });
       }
     }
 
@@ -290,7 +293,7 @@ const VacationTimePage: React.FC = () => {
     const vacationBalance = Number((hoursEarned - vacationUsed).toFixed(2));
     const ptoAllocation = Number(profile.pto || 0);
     const ptoBalance = Number((ptoAllocation - ptoUsed).toFixed(2));
-    return { periodsWorked, hoursEarned, vacationUsed, vacationBalance, ptoAllocation, ptoUsed, ptoBalance };
+    return { periodsWorked, hoursEarned, vacationUsed, vacationBalance, ptoAllocation, ptoUsed, ptoBalance, accrualBreakdown };
   };
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 15, boxSizing: 'border-box' };
@@ -395,6 +398,7 @@ const VacationTimePage: React.FC = () => {
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Rate (hrs/week)</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Weeks Worked</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Vac Earned</th>
+                    <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Accrual Breakdown</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Vac Used</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>Vac Balance</th>
                     <th style={{ padding: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>PTO Allocated</th>
@@ -429,6 +433,15 @@ const VacationTimePage: React.FC = () => {
                         </td>
                         <td style={{ ...cellStyle, textAlign: 'center', color: '#1a237e', fontWeight: 600 }}>{bal?.periodsWorked ?? '-'}</td>
                         <td style={{ ...cellStyle, textAlign: 'center', color: '#15803d', fontWeight: 600 }}>{bal?.hoursEarned ?? '-'}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center', fontSize: 12 }}>
+                          {bal?.accrualBreakdown && bal.accrualBreakdown.length > 0 ? (
+                            bal.accrualBreakdown.map((seg, i) => (
+                              <div key={i} style={{ whiteSpace: 'nowrap', color: '#334155' }}>
+                                {seg.weeks}wk × {seg.rate} = <strong style={{ color: '#15803d' }}>{seg.hours}</strong>
+                              </div>
+                            ))
+                          ) : '-'}
+                        </td>
                         <td style={{ ...cellStyle, textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{bal?.vacationUsed ?? '-'}</td>
                         <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: (bal?.vacationBalance ?? 0) >= 0 ? '#15803d' : '#dc2626' }}>
                           {bal?.vacationBalance ?? '-'} hrs
