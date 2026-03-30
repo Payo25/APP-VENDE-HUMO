@@ -456,8 +456,7 @@ const VacationTimePage: React.FC = () => {
                       <tr key={p.id}>
                         <td style={{ ...cellStyle, fontWeight: 600 }}>{p.user_name}</td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
-                          {isEditing ? <input type="date" value={inlineStartDate} onChange={e => setInlineStartDate(e.target.value)} style={inlineInput} />
-                            : p.employment_start_date?.split('T')[0]}
+                          {p.employment_start_date?.split('T')[0]}
                         </td>
                         <td style={{ ...cellStyle, textAlign: 'center' }}>
                           {isEditing ? <input type="number" step="0.01" min="0" value={inlineRate} onChange={e => setInlineRate(e.target.value)} style={{ ...inlineInput, width: 70 }} />
