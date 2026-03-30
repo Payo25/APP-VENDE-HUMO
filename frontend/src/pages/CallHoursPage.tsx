@@ -30,8 +30,8 @@ const CallHoursPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, assignmentRole?: string }
-  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, assignmentRole?: string }[] }>({});
+  // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, healthCenters?: string[], assignmentRole?: string }
+  const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, healthCenters?: string[], assignmentRole?: string }[] }>({});
   const [healthCenters, setHealthCenters] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -69,7 +69,17 @@ const CallHoursPage: React.FC = () => {
       })
       .then(data => {
         const hasData = Object.keys(data).length > 0;
-        setAssignments(data);
+        // Normalize old healthCenter string to healthCenters array
+        const normalized: any = {};
+        for (const dateKey of Object.keys(data)) {
+          normalized[dateKey] = (data[dateKey] || []).map((a: any) => {
+            if (!a.healthCenters) {
+              a.healthCenters = a.healthCenter ? [a.healthCenter] : [];
+            }
+            return a;
+          });
+        }
+        setAssignments(normalized);
         setHasSavedData(hasData);
         setIsEditMode(!hasData); // Auto-enable edit mode if no saved data
         setLoading(false);
@@ -91,19 +101,54 @@ const CallHoursPage: React.FC = () => {
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       if (prevList.some((a: any) => String(a.id) === String(rsaId))) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', assignmentRole: 'On Call' }] };
+      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', healthCenters: [], assignmentRole: 'On Call' }] };
     });
   };
 
-  const handleUpdateHealthCenter = (day: number, rsaId: string, healthCenter: string) => {
+  const handleUpdateHealthCenter = (day: number, rsaId: string, index: number, value: string) => {
     const dateKey = getDateString(year, month, day);
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       return {
         ...prev,
-        [dateKey]: prevList.map((a: any) =>
-          String(a.id) === String(rsaId) ? { ...a, healthCenter } : a
-        )
+        [dateKey]: prevList.map((a: any) => {
+          if (String(a.id) !== String(rsaId)) return a;
+          const hcs = [...(a.healthCenters || [])];
+          hcs[index] = value;
+          return { ...a, healthCenters: hcs, healthCenter: hcs[0] || '' };
+        })
+      };
+    });
+  };
+
+  const handleAddHealthCenter = (day: number, rsaId: string) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) => {
+          if (String(a.id) !== String(rsaId)) return a;
+          const hcs = [...(a.healthCenters || [])];
+          hcs.push('');
+          return { ...a, healthCenters: hcs };
+        })
+      };
+    });
+  };
+
+  const handleRemoveHealthCenter = (day: number, rsaId: string, index: number) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) => {
+          if (String(a.id) !== String(rsaId)) return a;
+          const hcs = [...(a.healthCenters || [])];
+          hcs.splice(index, 1);
+          return { ...a, healthCenters: hcs, healthCenter: hcs[0] || '' };
+        })
       };
     });
   };
@@ -384,24 +429,43 @@ cells.push(
                                         {a.assignmentRole === '1st Assistant' ? '🟣 1st Asst' : a.assignmentRole === '2nd Assistant' ? '🔵 2nd Asst' : a.assignmentRole === 'Vacation' ? '🌴 Vacation' : a.assignmentRole === 'PTO' ? '📋 PTO' : '🟠 On Call'}
                                       </div>
                                     )}
-                                    {/* Health Center */}
+                                    {/* Health Centers */}
                                     {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
-                                      <select
-                                        value={a.healthCenter || ''}
-                                        onChange={e => handleUpdateHealthCenter(thisDay, a.id, e.target.value)}
-                                        style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', width: '100%', marginTop: 2 }}
-                                      >
-                                        <option value="">-- Health Center --</option>
-                                        {healthCenters.map(hc => (
-                                          <option key={hc.id} value={hc.name}>{hc.name}</option>
+                                      <div style={{ marginTop: 2 }}>
+                                        {(a.healthCenters && a.healthCenters.length > 0 ? a.healthCenters : ['']).map((hc: string, hcIdx: number) => (
+                                          <div key={hcIdx} style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 2 }}>
+                                            <select
+                                              value={hc || ''}
+                                              onChange={e => handleUpdateHealthCenter(thisDay, a.id, hcIdx, e.target.value)}
+                                              style={{ fontSize: 11, padding: '2px 3px', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', flex: 1 }}
+                                            >
+                                              <option value="">-- Health Center --</option>
+                                              {healthCenters.map(h => (
+                                                <option key={h.id} value={h.name}>{h.name}</option>
+                                              ))}
+                                            </select>
+                                            {(a.healthCenters?.length || 0) > 1 && (
+                                              <button onClick={() => handleRemoveHealthCenter(thisDay, a.id, hcIdx)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                                            )}
+                                          </div>
                                         ))}
-                                      </select>
+                                        <button
+                                          onClick={() => handleAddHealthCenter(thisDay, a.id)}
+                                          style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, border: '1px solid #667eea', background: '#f0f0ff', color: '#667eea', cursor: 'pointer', fontWeight: 600, marginTop: 1 }}
+                                        >+ HC</button>
+                                      </div>
                                     ) : (
-                                      a.healthCenter && (
+                                      (a.healthCenters && a.healthCenters.filter(Boolean).length > 0) ? (
+                                        a.healthCenters.filter(Boolean).map((hc: string, i: number) => (
+                                          <div key={i} style={{ fontSize: 11, color: '#1a237e', fontWeight: 600, marginTop: 2 }}>
+                                            🏥 {hc}
+                                          </div>
+                                        ))
+                                      ) : a.healthCenter ? (
                                         <div style={{ fontSize: 11, color: '#1a237e', fontWeight: 600, marginTop: 2 }}>
                                           🏥 {a.healthCenter}
                                         </div>
-                                      )
+                                      ) : null
                                     )}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                                       {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (

@@ -198,7 +198,11 @@ const InvoicesPage: React.FC = () => {
         const dayEntries = callAssignments[dateKey];
         if (!Array.isArray(dayEntries)) continue;
         for (const entry of dayEntries) {
-          if (entry.healthCenter !== hcName) continue;
+          // Support both old healthCenter string and new healthCenters array
+          const entryHCs: string[] = entry.healthCenters && entry.healthCenters.length > 0
+            ? entry.healthCenters
+            : (entry.healthCenter ? [entry.healthCenter] : []);
+          if (!entryHCs.includes(hcName)) continue;
           const role = entry.assignmentRole || 'On Call';
           if (!roleGroups[role]) {
             roleGroups[role] = { dateTotals: {}, totalHours: 0, unitPrice: 0 };
