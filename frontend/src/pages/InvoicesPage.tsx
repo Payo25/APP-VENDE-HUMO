@@ -190,9 +190,8 @@ const InvoicesPage: React.FC = () => {
       if (!res.ok) throw new Error();
       const callAssignments = await res.json();
 
-      const dateTotals: { [dateKey: string]: number } = {};
-      let grandTotalHours = 0;
-      let unitPrice = 0;
+      // Group by assignmentRole
+      const roleGroups: { [role: string]: { dateTotals: { [dateKey: string]: number }, totalHours: number, unitPrice: number } } = {};
 
       const sortedDates = Object.keys(callAssignments).sort();
       for (const dateKey of sortedDates) {
@@ -200,38 +199,60 @@ const InvoicesPage: React.FC = () => {
         if (!Array.isArray(dayEntries)) continue;
         for (const entry of dayEntries) {
           if (entry.healthCenter !== hcName) continue;
+          const role = entry.assignmentRole || 'On Call';
+          if (!roleGroups[role]) {
+            roleGroups[role] = { dateTotals: {}, totalHours: 0, unitPrice: 0 };
+          }
           const h = entry.hours ?? (entry.shift === 'F' ? 24 : 12);
           const min = entry.minutes ?? 0;
           const decimalH = h + min / 60;
-          if (!dateTotals[dateKey]) dateTotals[dateKey] = 0;
-          dateTotals[dateKey] += decimalH;
-          grandTotalHours += decimalH;
-          if (unitPrice === 0) {
+          if (!roleGroups[role].dateTotals[dateKey]) roleGroups[role].dateTotals[dateKey] = 0;
+          roleGroups[role].dateTotals[dateKey] += decimalH;
+          roleGroups[role].totalHours += decimalH;
+          if (roleGroups[role].unitPrice === 0) {
             const user = allUsers.find(u => String(u.id) === String(entry.id));
-            unitPrice = user?.hourlyRate || 3.00;
+            roleGroups[role].unitPrice = user?.hourlyRate || 3.00;
           }
         }
       }
 
-      const dateKeys = Object.keys(dateTotals).sort();
-      if (dateKeys.length > 0) {
-        const totalQty = Number(grandTotalHours.toFixed(2));
-        const totalPrice = Number((totalQty * unitPrice).toFixed(2));
-        setLineItems([{
-          description: 'On call hours',
-          qty: totalQty,
-          unitPrice: unitPrice,
-          totalPrice: totalPrice
-        }]);
-
-        const mm = m.toString().padStart(2, '0');
-        const dateHourParts = dateKeys.map(dk => {
-          const day = dk.split('-')[2];
-          const hrs = dateTotals[dk];
-          const hrsDisplay = Number.isInteger(hrs) ? hrs.toString() : hrs.toFixed(1);
-          return `${mm}/${day}*${hrsDisplay}H`;
+      const roleKeys = Object.keys(roleGroups);
+      if (roleKeys.length > 0) {
+        // Stable ordering: 1st Assistant, 2nd Assistant, On Call, then others
+        const roleOrder = ['1st Assistant', '2nd Assistant', 'On Call'];
+        roleKeys.sort((a, b) => {
+          const ai = roleOrder.indexOf(a);
+          const bi = roleOrder.indexOf(b);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        setNotes(`On call hours:\n${dateHourParts.join(', ')}`);
+
+        const newLines: LineItem[] = [];
+        const noteParts: string[] = [];
+        const mm = m.toString().padStart(2, '0');
+
+        for (const role of roleKeys) {
+          const grp = roleGroups[role];
+          const totalQty = Number(grp.totalHours.toFixed(2));
+          const price = grp.unitPrice;
+          newLines.push({
+            description: `On call hours ${role}`,
+            qty: totalQty,
+            unitPrice: price,
+            totalPrice: Number((totalQty * price).toFixed(2))
+          });
+
+          const dateKeys = Object.keys(grp.dateTotals).sort();
+          const dateHourParts = dateKeys.map(dk => {
+            const day = dk.split('-')[2];
+            const hrs = grp.dateTotals[dk];
+            const hrsDisplay = Number.isInteger(hrs) ? hrs.toString() : hrs.toFixed(1);
+            return `${mm}/${day}*${hrsDisplay}H`;
+          });
+          noteParts.push(`On call hours ${role}:\n${dateHourParts.join(', ')}`);
+        }
+
+        setLineItems(newLines);
+        setNotes(noteParts.join('\n\n'));
       } else {
         setLineItems([{ ...emptyLine }]);
         setNotes('');
