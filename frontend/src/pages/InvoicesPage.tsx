@@ -59,6 +59,9 @@ const InvoicesPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('Pending');
   const [includeCallHours, setIncludeCallHours] = useState<'no' | 'yes'>('no');
+  const [callHoursDateFrom, setCallHoursDateFrom] = useState('');
+  const [callHoursDateTo, setCallHoursDateTo] = useState('');
+  const [callHoursHC, setCallHoursHC] = useState('');
   const [allUsers, setAllUsers] = useState<{id: number, fullName: string, role: string, hourlyRate?: number}[]>([]);
 
   // View state
@@ -133,6 +136,9 @@ const InvoicesPage: React.FC = () => {
     setNotes('');
     setStatus('Pending');
     setIncludeCallHours('no');
+    setCallHoursDateFrom('');
+    setCallHoursDateTo('');
+    setCallHoursHC('');
     fetchNextNumber();
   };
 
@@ -163,47 +169,68 @@ const InvoicesPage: React.FC = () => {
     setHealthCenterName(name);
     const hc = healthCenters.find(h => h.name === name);
     setHealthCenterAddress(hc?.address || '');
-    if (includeCallHours === 'yes' && name) {
-      fetchCallHoursData(name);
-    } else {
-      setLineItems([{ ...emptyLine }]);
-      setNotes('');
-    }
   };
 
   const handleIncludeCallHoursChange = (value: 'yes' | 'no') => {
     setIncludeCallHours(value);
-    if (value === 'yes' && healthCenterName) {
-      fetchCallHoursData(healthCenterName);
-    } else if (value === 'no') {
+    if (value === 'no') {
       setLineItems([{ ...emptyLine }]);
       setNotes('');
+      setCallHoursDateFrom('');
+      setCallHoursDateTo('');
+      setCallHoursHC('');
     }
   };
 
-  const fetchCallHoursData = async (hcName: string) => {
+  const handleFetchCallHours = () => {
+    if (callHoursDateFrom && callHoursDateTo && callHoursHC) {
+      fetchCallHoursData(callHoursHC, callHoursDateFrom, callHoursDateTo);
+    }
+  };
+
+  const fetchCallHoursData = async (hcName: string, dateFrom: string, dateTo: string) => {
     try {
       setLoadingCallHours(true);
-      const dateForMonth = invoiceDate || new Date().toISOString().split('T')[0];
-      const [y, m] = dateForMonth.split('-').map(Number);
-      const res = await authFetch(`${API_BASE_URL}/call-hours?month=${m}&year=${y}`);
-      if (!res.ok) throw new Error();
-      const callAssignments = await res.json();
+      // Determine which months to fetch (date range may span multiple months)
+      const from = new Date(dateFrom + 'T00:00:00');
+      const to = new Date(dateTo + 'T00:00:00');
+      const monthsToFetch: { m: number; y: number }[] = [];
+      const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+      while (cur <= to) {
+        monthsToFetch.push({ m: cur.getMonth() + 1, y: cur.getFullYear() });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+
+      // Fetch all needed months
+      let allAssignments: { [dateKey: string]: any[] } = {};
+      for (const { m, y } of monthsToFetch) {
+        const res = await authFetch(`${API_BASE_URL}/call-hours?month=${m}&year=${y}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        allAssignments = { ...allAssignments, ...data };
+      }
+
+      const isSilverCross = hcName === 'Silver Cross Hospital';
 
       // Group by assignmentRole
       const roleGroups: { [role: string]: { dateTotals: { [dateKey: string]: number }, totalHours: number, unitPrice: number } } = {};
 
-      const sortedDates = Object.keys(callAssignments).sort();
+      const sortedDates = Object.keys(allAssignments).sort();
       for (const dateKey of sortedDates) {
-        const dayEntries = callAssignments[dateKey];
+        // Filter by date range
+        if (dateKey < dateFrom || dateKey > dateTo) continue;
+        const dayEntries = allAssignments[dateKey];
         if (!Array.isArray(dayEntries)) continue;
         for (const entry of dayEntries) {
-          // Support both old healthCenter string and new healthCenters array
           const entryHCs: string[] = entry.healthCenters && entry.healthCenters.length > 0
             ? entry.healthCenters
             : (entry.healthCenter ? [entry.healthCenter] : []);
           if (!entryHCs.includes(hcName)) continue;
-          const role = entry.assignmentRole || 'On Call';
+          let role = entry.assignmentRole || 'On Call';
+          // For non-Silver Cross, collapse all roles into 'On Call'
+          if (!isSilverCross) {
+            role = 'On Call';
+          }
           if (!roleGroups[role]) {
             roleGroups[role] = { dateTotals: {}, totalHours: 0, unitPrice: 0 };
           }
@@ -222,7 +249,6 @@ const InvoicesPage: React.FC = () => {
 
       const roleKeys = Object.keys(roleGroups);
       if (roleKeys.length > 0) {
-        // Stable ordering: 1st Assistant, 2nd Assistant, On Call, then others
         const roleOrder = ['1st Assistant', '2nd Assistant', 'On Call'];
         roleKeys.sort((a, b) => {
           const ai = roleOrder.indexOf(a);
@@ -232,14 +258,13 @@ const InvoicesPage: React.FC = () => {
 
         const newLines: LineItem[] = [];
         const noteParts: string[] = [];
-        const mm = m.toString().padStart(2, '0');
 
         for (const role of roleKeys) {
           const grp = roleGroups[role];
           const totalQty = Number(grp.totalHours.toFixed(2));
           const price = grp.unitPrice;
           newLines.push({
-            description: `On call hours ${role}`,
+            description: `On call hours${isSilverCross ? ' ' + role : ''}`,
             qty: totalQty,
             unitPrice: price,
             totalPrice: Number((totalQty * price).toFixed(2))
@@ -247,12 +272,12 @@ const InvoicesPage: React.FC = () => {
 
           const dateKeys = Object.keys(grp.dateTotals).sort();
           const dateHourParts = dateKeys.map(dk => {
-            const day = dk.split('-')[2];
+            const [, mm, dd] = dk.split('-');
             const hrs = grp.dateTotals[dk];
             const hrsDisplay = Number.isInteger(hrs) ? hrs.toString() : hrs.toFixed(1);
-            return `${mm}/${day}*${hrsDisplay}H`;
+            return `${mm}/${dd}*${hrsDisplay}H`;
           });
-          noteParts.push(`On call hours ${role}:\n${dateHourParts.join(', ')}`);
+          noteParts.push(`On call hours${isSilverCross ? ' ' + role : ''}:\n${dateHourParts.join(', ')}`);
         }
 
         setLineItems(newLines);
@@ -622,6 +647,43 @@ const InvoicesPage: React.FC = () => {
               <option value="yes">Yes — Auto-fill from call hours</option>
             </select>
           </div>
+
+          {/* Call Hours Date Range & HC Filter */}
+          {includeCallHours === 'yes' && (
+            <div style={{ marginBottom: 20, padding: 16, background: '#f0f4ff', borderRadius: 8, border: '1px solid #c7d2fe' }}>
+              <label style={{ fontWeight: 700, fontSize: 14, display: 'block', marginBottom: 10, color: '#1a237e' }}>On-Call Hours Filter</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 4 }}>Date From</label>
+                  <input type="date" value={callHoursDateFrom} onChange={e => setCallHoursDateFrom(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 4 }}>Date To</label>
+                  <input type="date" value={callHoursDateTo} onChange={e => setCallHoursDateTo(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 4 }}>Health Center for On-Call Hours</label>
+                <select value={callHoursHC} onChange={e => setCallHoursHC(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}>
+                  <option value="">-- Select Health Center --</option>
+                  {healthCenters.map(hc => (
+                    <option key={hc.id} value={hc.name}>{hc.name}</option>
+                  ))}
+                </select>
+                {callHoursHC === 'Silver Cross Hospital' && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#667eea', fontStyle: 'italic' }}>Silver Cross Hospital: will split by 1st Assistant &amp; 2nd Assistant</div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleFetchCallHours}
+                disabled={!callHoursDateFrom || !callHoursDateTo || !callHoursHC || loadingCallHours}
+                style={{ padding: '8px 24px', background: (!callHoursDateFrom || !callHoursDateTo || !callHoursHC) ? '#ccc' : '#667eea', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: (!callHoursDateFrom || !callHoursDateTo || !callHoursHC) ? 'not-allowed' : 'pointer' }}
+              >
+                {loadingCallHours ? 'Loading...' : 'Fetch On-Call Hours'}
+              </button>
+            </div>
+          )}
 
           {/* Line Items */}
           <div style={{ marginBottom: 20 }}>
