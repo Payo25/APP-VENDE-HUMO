@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../utils/api';
+import jsPDF from 'jspdf';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -33,6 +34,9 @@ const CreateFormPage: React.FC = () => {
   const [caseType, setCaseType] = useState(caseTypeOptions[0]);
   const [assistantType, setAssistantType] = useState(assistantTypeOptions[0]);
   const [surgeryFormFile, setSurgeryFormFile] = useState<File | null>(null);
+  const [scannedPages, setScannedPages] = useState<string[]>([]);
+  const [scanMode, setScanMode] = useState<'scan' | 'upload'>('scan');
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [healthCenters, setHealthCenters] = useState<any[]>([]);
@@ -57,10 +61,23 @@ const CreateFormPage: React.FC = () => {
       !date ||
       (!timeIn && caseType !== 'Cancelled') ||
       (!timeOut && caseType !== 'Cancelled') ||
-      !doctorName || !procedure || !caseType || !assistantType || !surgeryFormFile
+      !doctorName || !procedure || !caseType || !assistantType ||
+      (scanMode === 'upload' && !surgeryFormFile) ||
+      (scanMode === 'scan' && scannedPages.length === 0)
     ) {
-      setError('All fields are required.');
+      setError('All fields are required.' + (scanMode === 'scan' && scannedPages.length === 0 ? ' Please scan at least one page.' : ''));
       return;
+    }
+
+    // If scan mode, convert scanned pages to PDF
+    let fileToUpload = surgeryFormFile;
+    if (scanMode === 'scan' && scannedPages.length > 0) {
+      try {
+        fileToUpload = await convertPagesToPDF(scannedPages);
+      } catch {
+        setError('Failed to convert scanned pages to PDF.');
+        return;
+      }
     }
 
     // Prepare form data for file upload
@@ -84,7 +101,9 @@ const CreateFormPage: React.FC = () => {
       return;
     }
     formData.append('createdByUserId', userId);
-    formData.append('surgeryFormFile', surgeryFormFile);
+    if (fileToUpload) {
+      formData.append('surgeryFormFile', fileToUpload);
+    }
 
     try {
       const res = await authFetch(API_URL, {
@@ -121,6 +140,50 @@ const CreateFormPage: React.FC = () => {
       </div>
     );
   }
+
+  const convertPagesToPDF = async (pages: string[]): Promise<File> => {
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0) pdf.addPage();
+      const img = new Image();
+      img.src = pages[i];
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        if (img.complete) resolve();
+      });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pageW / img.width, pageH / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      const x = (pageW - w) / 2;
+      const y = (pageH - h) / 2;
+      pdf.addImage(pages[i], 'JPEG', x, y, w, h);
+    }
+    const blob = pdf.output('blob');
+    return new File([blob], 'scanned-document.pdf', { type: 'application/pdf' });
+  };
+
+  const handleScanCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setScannedPages(prev => [...prev, ev.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset the input so the same file can be re-selected
+    e.target.value = '';
+  };
+
+  const removePage = (index: number) => {
+    setScannedPages(prev => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div style={{
@@ -279,14 +342,42 @@ const CreateFormPage: React.FC = () => {
             </select>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Surgery Form (Image or PDF Upload)</label>
-            <input
-              type="file"
-              accept="image/*,.pdf,application/pdf"
-              onChange={e => setSurgeryFormFile(e.target.files ? e.target.files[0] : null)}
-              required
-              style={{ width: '100%', padding: '10px 0', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box', background: '#fff' }}
-            />
+            <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Surgery Form (Scan or Upload)</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <button type="button" onClick={() => { setScanMode('scan'); setSurgeryFormFile(null); }} style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: scanMode === 'scan' ? '2px solid #667eea' : '1px solid #bfc9d9', background: scanMode === 'scan' ? '#f0f0ff' : '#fff', color: scanMode === 'scan' ? '#667eea' : '#666', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>📷 Scan Document</button>
+              <button type="button" onClick={() => { setScanMode('upload'); setScannedPages([]); }} style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: scanMode === 'upload' ? '2px solid #667eea' : '1px solid #bfc9d9', background: scanMode === 'upload' ? '#f0f0ff' : '#fff', color: scanMode === 'upload' ? '#667eea' : '#666', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>📁 Upload File</button>
+            </div>
+
+            {scanMode === 'scan' ? (
+              <div>
+                <input ref={scanInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanCapture} style={{ display: 'none' }} />
+                <button type="button" onClick={() => scanInputRef.current?.click()} style={{ width: '100%', padding: '12px 0', borderRadius: 6, border: '2px dashed #667eea', background: '#f8f9ff', color: '#667eea', fontWeight: 600, cursor: 'pointer', fontSize: 15, marginBottom: 8 }}>
+                  📷 {scannedPages.length === 0 ? 'Take Photo / Scan Page' : '+ Add Another Page'}
+                </button>
+                {scannedPages.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>{scannedPages.length} page{scannedPages.length > 1 ? 's' : ''} scanned — will be saved as PDF</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {scannedPages.map((page, idx) => (
+                        <div key={idx} style={{ position: 'relative', border: '1px solid #d0d5dd', borderRadius: 6, overflow: 'hidden', width: 80, height: 100 }}>
+                          <img src={page} alt={`Page ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button type="button" onClick={() => removePage(idx)} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', lineHeight: '18px', fontWeight: 700 }}>×</button>
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '1px 0' }}>Page {idx + 1}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <input
+                type="file"
+                accept="image/*,.pdf,application/pdf"
+                onChange={e => setSurgeryFormFile(e.target.files ? e.target.files[0] : null)}
+                required
+                style={{ width: '100%', padding: '10px 0', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+              />
+            )}
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Case Type</label>
