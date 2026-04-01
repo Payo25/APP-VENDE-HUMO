@@ -585,12 +585,19 @@ async function uploadToBlob(file) {
 // --- Forms API using PostgreSQL ---
 app.get('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
-    const result = await pool.query(`
+    let query = `
       SELECT forms.*, users.fullname AS createdbyfullname, users.username AS createdbyemail
       FROM forms
       LEFT JOIN users ON forms.createdbyuserid = users.id
-      ORDER BY forms.id DESC
-    `);
+    `;
+    const params = [];
+    // HIPAA: RSAs can only see their own forms (minimum necessary)
+    if (req.user.role === 'Registered Surgical Assistant') {
+      query += ` WHERE forms.createdbyuserid = $1`;
+      params.push(req.user.id);
+    }
+    query += ` ORDER BY forms.id DESC`;
+    const result = await pool.query(query, params);
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
       id: form.id,
@@ -616,6 +623,7 @@ app.get('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Sur
       createdAt: form.createdat,
       lastModified: form.lastmodified,
     }));
+    logAudit('FORMS_LISTED', req.user.username, { count: forms.length, role: req.user.role });
     res.json(forms);
   } catch (err) {
     console.error('Error fetching forms:', err);
@@ -633,6 +641,12 @@ app.get('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
     `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     const form = result.rows[0];
+
+    // HIPAA: RSAs can only view their own forms (minimum necessary)
+    if (req.user.role === 'Registered Surgical Assistant' && form.createdbyuserid !== req.user.id) {
+      logAudit('UNAUTHORIZED_FORM_ACCESS', req.user.username, { formId: req.params.id, role: req.user.role });
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     const camelCaseForm = {
       id: form.id,
@@ -658,6 +672,7 @@ app.get('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
       createdAt: form.createdat,
       lastModified: form.lastmodified,
     };
+    logAudit('FORM_ACCESSED', req.user.username, { formId: req.params.id, patientName: form.patientname });
     res.json(camelCaseForm);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -695,6 +710,14 @@ app.post('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Su
 // --- PATCH: Support multipart/form-data for editing forms with/without file ---
 app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), upload.single('surgeryFormFile'), async (req, res) => {
   try {
+    // HIPAA: RSAs can only edit their own forms
+    if (req.user.role === 'Registered Surgical Assistant') {
+      const check = await pool.query('SELECT createdbyuserid FROM forms WHERE id = $1', [req.params.id]);
+      if (check.rows.length > 0 && check.rows[0].createdbyuserid !== req.user.id) {
+        logAudit('UNAUTHORIZED_FORM_EDIT', req.user.username, { formId: req.params.id });
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
     // Explicit mapping from camelCase to DB columns
     const fieldMap = {
       patientName: 'patientname',
@@ -744,6 +767,14 @@ app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
 
 app.delete('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
+    // HIPAA: RSAs can only delete their own forms
+    if (req.user.role === 'Registered Surgical Assistant') {
+      const check = await pool.query('SELECT createdbyuserid FROM forms WHERE id = $1', [req.params.id]);
+      if (check.rows.length > 0 && check.rows[0].createdbyuserid !== req.user.id) {
+        logAudit('UNAUTHORIZED_FORM_DELETE', req.user.username, { formId: req.params.id });
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
     await pool.query('DELETE FROM forms WHERE id = $1', [req.params.id]);
     logAudit('FORM_DELETED', req.user.username, { formId: req.params.id });
     res.status(204).end();
@@ -909,6 +940,14 @@ app.get('/api/audit-logs', requireRole('Admin'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
   }
+});
+
+// HIPAA: Frontend audit action endpoint for logging PHI access from client
+app.post('/api/audit-action', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), (req, res) => {
+  const { action, details } = req.body;
+  if (!action) return res.status(400).json({ error: 'Action required' });
+  logAudit(action, req.user.username, details || {});
+  res.json({ success: true });
 });
 
 function logAudit(action, actor, details) {
@@ -1138,7 +1177,7 @@ app.post('/api/call-hours', requireRole('Business Assistant', 'Team Leader', 'Sc
 });
 
 // --- Health Centers API ---
-app.get('/api/health-centers', async (req, res) => {
+app.get('/api/health-centers', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM health_centers ORDER BY name ASC');
     res.json(result.rows);
