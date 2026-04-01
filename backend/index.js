@@ -33,7 +33,57 @@ if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable is not set. Server cannot start securely.');
   process.exit(1);
 }
-const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
+const JWT_EXPIRES_IN = '12h'; // HIPAA: Shorter token lifetime
+
+// PHI column-level encryption (opt-in via PHI_ENCRYPTION_KEY env var)
+const PHI_ENCRYPTION_KEY = process.env.PHI_ENCRYPTION_KEY; // 64-char hex = 32 bytes AES-256 key
+if (PHI_ENCRYPTION_KEY && PHI_ENCRYPTION_KEY.length !== 64) {
+  console.error('FATAL: PHI_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes).');
+  process.exit(1);
+}
+function encryptPHI(text) {
+  if (!PHI_ENCRYPTION_KEY || !text) return text;
+  const key = Buffer.from(PHI_ENCRYPTION_KEY, 'hex');
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let encrypted = cipher.update(String(text), 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return `enc:${iv.toString('hex')}:${encrypted}:${tag}`;
+}
+function decryptPHI(text) {
+  if (!text || !String(text).startsWith('enc:')) return text;
+  if (!PHI_ENCRYPTION_KEY) return text;
+  try {
+    const parts = String(text).split(':');
+    const iv = Buffer.from(parts[1], 'hex');
+    const encrypted = parts[2];
+    const tag = Buffer.from(parts[3], 'hex');
+    const key = Buffer.from(PHI_ENCRYPTION_KEY, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (e) {
+    console.error('PHI decryption error:', e.message);
+    return text;
+  }
+}
+
+// Magic byte validation for file uploads (prevents MIME type spoofing)
+const FILE_SIGNATURES = {
+  'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
+  'image/jpg': [Buffer.from([0xFF, 0xD8, 0xFF])],
+  'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47])],
+  'image/gif': [Buffer.from([0x47, 0x49, 0x46, 0x38])],
+  'application/pdf': [Buffer.from([0x25, 0x50, 0x44, 0x46])]
+};
+function validateFileMagicBytes(buffer, mimetype) {
+  const sigs = FILE_SIGNATURES[mimetype];
+  if (!sigs) return false;
+  return sigs.some(sig => buffer.length >= sig.length && sig.every((b, i) => buffer[i] === b));
+}
 
 // Account lockout settings
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -366,6 +416,27 @@ async function migrateDatabase() {
       );
     `);
     
+    // Alter PHI columns to TEXT for encryption support
+    await pool.query(`ALTER TABLE forms ALTER COLUMN patientname TYPE TEXT;`).catch(() => {});
+    await pool.query(`ALTER TABLE forms ALTER COLUMN insurancecompany TYPE TEXT;`).catch(() => {});
+    await pool.query(`ALTER TABLE forms ALTER COLUMN dob TYPE TEXT USING dob::TEXT;`).catch(() => {});
+
+    // Auto-encrypt existing unencrypted PHI if encryption key is set
+    if (PHI_ENCRYPTION_KEY) {
+      const unencrypted = await pool.query(
+        "SELECT id, patientname, dob, insurancecompany, procedure FROM forms WHERE patientname IS NOT NULL AND patientname NOT LIKE 'enc:%'"
+      );
+      for (const row of unencrypted.rows) {
+        await pool.query(
+          'UPDATE forms SET patientname=$1, dob=$2, insurancecompany=$3, procedure=$4 WHERE id=$5',
+          [encryptPHI(row.patientname), encryptPHI(row.dob), encryptPHI(row.insurancecompany), encryptPHI(row.procedure), row.id]
+        );
+      }
+      if (unencrypted.rows.length > 0) {
+        console.log(`🔒 Encrypted PHI for ${unencrypted.rows.length} existing form(s)`);
+      }
+    }
+
     console.log('✅ Database schema updated');
   } catch (err) {
     console.error('❌ Database migration error:', err.message);
@@ -601,15 +672,15 @@ app.get('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Sur
     // Map DB fields to camelCase for frontend compatibility
     const forms = result.rows.map(form => ({
       id: form.id,
-      patientName: form.patientname,
-      dob: form.dob ? new Date(form.dob).toISOString().split('T')[0] : null,
-      insuranceCompany: form.insurancecompany,
+      patientName: decryptPHI(form.patientname),
+      dob: form.dob ? decryptPHI(String(form.dob)) : null,
+      insuranceCompany: decryptPHI(form.insurancecompany),
       healthCenterName: form.healthcentername,
       date: form.date ? new Date(form.date).toISOString().split('T')[0] : null,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
-      procedure: form.procedure,
+      procedure: decryptPHI(form.procedure),
       caseType: form.casetype,
       assistantType: form.assistanttype,
       firstAssistant: form.firstassistant,
@@ -650,15 +721,15 @@ app.get('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
     
     const camelCaseForm = {
       id: form.id,
-      patientName: form.patientname,
-      dob: form.dob ? new Date(form.dob).toISOString().split('T')[0] : null,
-      insuranceCompany: form.insurancecompany,
+      patientName: decryptPHI(form.patientname),
+      dob: form.dob ? decryptPHI(String(form.dob)) : null,
+      insuranceCompany: decryptPHI(form.insurancecompany),
       healthCenterName: form.healthcentername,
       date: form.date ? new Date(form.date).toISOString().split('T')[0] : null,
       timeIn: form.timein,
       timeOut: form.timeout,
       doctorName: form.doctorname,
-      procedure: form.procedure,
+      procedure: decryptPHI(form.procedure),
       caseType: form.casetype,
       assistantType: form.assistanttype,
       firstAssistant: form.firstassistant,
@@ -692,12 +763,16 @@ app.post('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Su
   }
   
   try {
+    // Validate file magic bytes (prevents MIME spoofing)
+    if (!validateFileMagicBytes(req.file.buffer, req.file.mimetype)) {
+      return res.status(400).json({ error: 'File content does not match its declared type.' });
+    }
     // Upload file to Azure Blob Storage and get URL
     const fileUrl = await uploadToBlob(req.file);
     const result = await pool.query(
       `INSERT INTO forms (patientname, dob, insurancecompany, healthcentername, date, timein, timeout, doctorname, procedure, casetype, assistanttype, firstassistant, secondassistant, status, createdbyuserid, surgeryformfileurl, createdat)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-      [patientName, dob, insuranceCompany, healthCenterName, date, timeIn, timeOut, doctorName, procedure, caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
+      [encryptPHI(patientName), encryptPHI(dob), encryptPHI(insuranceCompany), healthCenterName, date, timeIn, timeOut, doctorName, encryptPHI(procedure), caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
     logAudit('FORM_CREATED', req.user.username, { formId: result.rows[0].id, patientName, healthCenterName });
     res.status(201).json(result.rows[0]);
@@ -734,12 +809,16 @@ app.put('/api/forms/:id', requireRole('Admin', 'Business Assistant', 'Registered
       status: 'status',
     };
     // Use req.body for text fields, req.file for file
+    const PHI_ENCRYPT_FIELDS = new Set(['patientName', 'dob', 'insuranceCompany', 'procedure']);
     const fields = Object.keys(req.body).filter(k => fieldMap[k]);
-    const values = fields.map(k => req.body[k]);
+    const values = fields.map(k => PHI_ENCRYPT_FIELDS.has(k) ? encryptPHI(req.body[k]) : req.body[k]);
     let setClause = fields.map((k, i) => `${fieldMap[k]} = $${i + 1}`).join(', ');
     let paramCount = fields.length;
-    // If a new file is uploaded, update surgeryFormFileUrl
+    // If a new file is uploaded, validate and update surgeryFormFileUrl
     if (req.file) {
+      if (!validateFileMagicBytes(req.file.buffer, req.file.mimetype)) {
+        return res.status(400).json({ error: 'File content does not match its declared type.' });
+      }
       const fileUrl = await uploadToBlob(req.file);
       paramCount++;
       setClause += (setClause ? ', ' : '') + `surgeryformfileurl = $${paramCount}`;
@@ -1112,6 +1191,7 @@ app.get('/api/call-hours', requireRole('Admin', 'Business Assistant', 'Team Lead
       'SELECT assignments FROM call_hours WHERE month = $1 AND year = $2',
       [Number(month), Number(year)]
     );
+    logAudit('CALL_HOURS_VIEWED', req.user.username, { month, year });
     res.json(result.rows[0]?.assignments || {});
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1169,6 +1249,7 @@ app.post('/api/call-hours', requireRole('Business Assistant', 'Team Leader', 'Sc
       sendSMSNotification(smsMessage).catch(console.error);
     }
     
+    logAudit(isUpdate ? 'CALL_HOURS_UPDATED' : 'CALL_HOURS_CREATED', req.user.username, { month, year });
     res.json({ success: true });
   } catch (err) {
     console.error('Error in call-hours endpoint:', err);
@@ -1194,6 +1275,7 @@ app.post('/api/health-centers', requireRole('Business Assistant', 'Scheduler'), 
       'INSERT INTO health_centers (name, address, phone, fax, email, contact_person) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       [name, address || '', phone || '', fax || '', email || '', contactPerson || '']
     );
+    logAudit('HEALTH_CENTER_CREATED', req.user.username, { id: result.rows[0].id, name });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1208,6 +1290,7 @@ app.put('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'
       'UPDATE health_centers SET name=$1, address=$2, phone=$3, fax=$4, email=$5, contact_person=$6 WHERE id=$7 RETURNING *',
       [name, address || '', phone || '', fax || '', email || '', contactPerson || '', req.params.id]
     );
+    logAudit('HEALTH_CENTER_UPDATED', req.user.username, { id: req.params.id, name });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1217,6 +1300,7 @@ app.put('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'
 app.delete('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM health_centers WHERE id=$1', [req.params.id]);
+    logAudit('HEALTH_CENTER_DELETED', req.user.username, { id: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1224,7 +1308,7 @@ app.delete('/api/health-centers/:id', requireRole('Business Assistant', 'Schedul
 });
 
 // ========== PHYSICIANS ENDPOINTS ==========
-app.get('/api/physicians', async (req, res) => {
+app.get('/api/physicians', requireRole('Admin', 'Business Assistant', 'Registered Surgical Assistant', 'Team Leader', 'Scheduler'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM physicians ORDER BY name');
     res.json(result.rows);
@@ -1240,6 +1324,7 @@ app.post('/api/physicians', requireRole('Business Assistant', 'Scheduler'), asyn
       'INSERT INTO physicians (name, specialty, phone, email, fax) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [name, specialty, phone || '', email || '', fax || '']
     );
+    logAudit('PHYSICIAN_CREATED', req.user.username, { id: result.rows[0].id, name });
     res.json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') {
@@ -1257,6 +1342,7 @@ app.put('/api/physicians/:id', requireRole('Business Assistant', 'Scheduler'), a
       'UPDATE physicians SET name=$1, specialty=$2, phone=$3, email=$4, fax=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *',
       [name, specialty, phone || '', email || '', fax || '', req.params.id]
     );
+    logAudit('PHYSICIAN_UPDATED', req.user.username, { id: req.params.id, name });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1266,6 +1352,7 @@ app.put('/api/physicians/:id', requireRole('Business Assistant', 'Scheduler'), a
 app.delete('/api/physicians/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM physicians WHERE id=$1', [req.params.id]);
+    logAudit('PHYSICIAN_DELETED', req.user.username, { id: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1477,6 +1564,7 @@ app.post('/api/rsa-emails', requireRole('Business Assistant', 'Scheduler'), asyn
       'INSERT INTO rsa_emails (rsa_name, email, phone, notes) VALUES ($1, $2, $3, $4) RETURNING *',
       [rsaName, email, phone || '', notes || '']
     );
+    logAudit('RSA_EMAIL_CREATED', req.user.username, { id: result.rows[0].id, rsaName });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1491,6 +1579,7 @@ app.put('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler'), a
       'UPDATE rsa_emails SET rsa_name=$1, email=$2, phone=$3, notes=$4, lastmodified=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
       [rsaName, email, phone || '', notes || '', req.params.id]
     );
+    logAudit('RSA_EMAIL_UPDATED', req.user.username, { id: req.params.id, rsaName });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1500,6 +1589,7 @@ app.put('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler'), a
 app.delete('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
   try {
     await pool.query('DELETE FROM rsa_emails WHERE id=$1', [req.params.id]);
+    logAudit('RSA_EMAIL_DELETED', req.user.username, { id: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1527,6 +1617,7 @@ app.get('/api/invoices', requireRole('Business Assistant'), async (req, res) => 
       createdAt: inv.createdat,
       lastModified: inv.lastmodified
     })));
+    logAudit('INVOICES_LISTED', req.user.username, { count: result.rows.length });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
   }
@@ -1546,6 +1637,7 @@ app.get('/api/invoices/:id', requireRole('Business Assistant'), async (req, res)
     const result = await pool.query('SELECT * FROM invoices WHERE id=$1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
     const inv = result.rows[0];
+    logAudit('INVOICE_VIEWED', req.user.username, { invoiceId: req.params.id, invoiceNumber: inv.invoice_number });
     res.json({
       id: inv.id,
       invoiceNumber: inv.invoice_number,
@@ -1620,6 +1712,7 @@ app.put('/api/invoices/:id/status', requireRole('Business Assistant'), async (re
       [status, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    logAudit('INVOICE_STATUS_CHANGED', req.user.username, { invoiceId: req.params.id, status });
     res.json({ success: true, status: result.rows[0].status });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
@@ -1739,6 +1832,7 @@ app.post('/api/invoices/:id/send-email', requireRole('Business Assistant'), invo
 
     await sgMail.send(mailMsg);
 
+    logAudit('INVOICE_EMAILED', req.user.username, { invoiceId: req.params.id, recipients: emailList });
     // Update status to Sent if currently Pending
     if (inv.status === 'Pending') {
       await pool.query("UPDATE invoices SET status='Sent', lastmodified=CURRENT_TIMESTAMP WHERE id=$1", [req.params.id]);
@@ -1766,6 +1860,7 @@ app.get('/api/my-vacation', requireRole('Registered Surgical Assistant', 'Team L
     const profile = profileResult.rows[0] || null;
     const entries = entriesResult.rows;
     const rateChanges = rateChangesResult.rows;
+    logAudit('MY_VACATION_VIEWED', req.user.username, { userId });
     res.json({ profile, entries, rateChanges });
   } catch (err) {
     console.error('Error fetching my vacation data:', err.message);
@@ -1790,6 +1885,7 @@ app.post('/api/vacation-requests', requireRole('Registered Surgical Assistant', 
       `INSERT INTO vacation_requests (user_id, request_type, request_date, hours, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [userId, request_type || 'Vacation', request_date, hours || 8, notes || null]
     );
+    logAudit('VACATION_REQUEST_CREATED', req.user.username, { requestId: result.rows[0].id, request_type, request_date });
     // Send email notification to scheduler/BA
     try {
       const userResult = await pool.query('SELECT fullname FROM users WHERE id=$1', [userId]);
@@ -1859,6 +1955,7 @@ app.get('/api/vacation-requests/mine', requireRole('Registered Surgical Assistan
        ORDER BY vr.request_date DESC`,
       [req.user.id]
     );
+    logAudit('VACATION_REQUESTS_MINE_VIEWED', req.user.username, { count: result.rows.length });
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching my vacation requests:', err.message);
@@ -1881,6 +1978,7 @@ app.get('/api/vacation-requests', requireRole('Scheduler', 'Business Assistant')
     }
     query += ` ORDER BY vr.createdat DESC`;
     const result = await pool.query(query, params);
+    logAudit('VACATION_REQUESTS_LISTED', req.user.username, { count: result.rows.length, statusFilter: status || 'all' });
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching vacation requests:', err.message);
@@ -1901,6 +1999,7 @@ app.put('/api/vacation-requests/:id/review', requireRole('Scheduler', 'Business 
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
     const request = result.rows[0];
+    logAudit('VACATION_REQUEST_REVIEWED', req.user.username, { requestId: req.params.id, status, userId: request.user_id });
     
     // If approved, also create a vacation_time entry
     if (status === 'Approved') {
@@ -1987,6 +2086,7 @@ app.delete('/api/vacation-requests/:id', requireRole('Registered Surgical Assist
       [req.params.id, req.user.id, 'Pending']
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Request not found or already reviewed' });
+    logAudit('VACATION_REQUEST_DELETED', req.user.username, { requestId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting vacation request:', err.message);
@@ -2005,6 +2105,7 @@ app.get('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leader
       JOIN users u ON vp.user_id = u.id 
       ORDER BY u.fullname ASC
     `);
+    logAudit('VACATION_PROFILES_LISTED', req.user.username, { count: result.rows.length });
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching vacation profiles:', err.message);
@@ -2022,6 +2123,7 @@ app.post('/api/vacation-profiles', requireRole('Business Assistant', 'Team Leade
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [user_id, employment_start_date, accrual_rate || 1.54, vacation_hourly_rate || null, pto || 0, notes || null]
     );
+    logAudit('VACATION_PROFILE_CREATED', req.user.username, { profileId: result.rows[0].id, user_id });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Profile already exists for this RSA' });
@@ -2054,6 +2156,7 @@ app.put('/api/vacation-profiles/:id', requireRole('Business Assistant', 'Team Le
       `UPDATE vacation_profiles SET employment_start_date=COALESCE($1,employment_start_date), accrual_rate=COALESCE($2,accrual_rate), vacation_hourly_rate=$3, pto=COALESCE($4,pto), notes=$5, lastmodified=CURRENT_TIMESTAMP WHERE id=$6 RETURNING *`,
       [employment_start_date, accrual_rate, vacation_hourly_rate !== undefined ? vacation_hourly_rate : null, pto !== undefined ? pto : 0, notes !== undefined ? notes : null, req.params.id]
     );
+    logAudit('VACATION_PROFILE_UPDATED', req.user.username, { profileId: req.params.id, rateChanged: Math.abs(newRate - oldRate) > 0.001 });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating vacation profile:', err.message);
@@ -2097,6 +2200,7 @@ app.put('/api/rate-changes/:id', requireRole('Business Assistant', 'Team Leader'
     if (latest.rows.length > 0) {
       await pool.query(`UPDATE vacation_profiles SET accrual_rate=$1, lastmodified=CURRENT_TIMESTAMP WHERE user_id=$2`, [latest.rows[0].new_rate, userId]);
     }
+    logAudit('RATE_CHANGE_UPDATED', req.user.username, { rateChangeId: req.params.id, new_rate, effective_date });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating rate change:', err.message);
@@ -2118,6 +2222,7 @@ app.delete('/api/rate-changes/:id', requireRole('Business Assistant', 'Team Lead
       // No more rate changes, revert to the deleted entry's old_rate
       await pool.query(`UPDATE vacation_profiles SET accrual_rate=$1, lastmodified=CURRENT_TIMESTAMP WHERE user_id=$2`, [result.rows[0].old_rate, userId]);
     }
+    logAudit('RATE_CHANGE_DELETED', req.user.username, { rateChangeId: req.params.id, userId });
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting rate change:', err.message);
@@ -2130,6 +2235,7 @@ app.delete('/api/vacation-profiles/:id', requireRole('Business Assistant', 'Team
   try {
     const result = await pool.query('DELETE FROM vacation_profiles WHERE id=$1 RETURNING *', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    logAudit('VACATION_PROFILE_DELETED', req.user.username, { profileId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting vacation profile:', err.message);
@@ -2159,6 +2265,7 @@ app.get('/api/vacation-time', requireRole('Business Assistant', 'Team Leader', '
     }
     query += ` ORDER BY vt.vacation_date DESC, vt.createdat DESC`;
     const result = await pool.query(query, params);
+    logAudit('VACATION_TIME_LISTED', req.user.username, { count: result.rows.length, user_id: user_id || 'all' });
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching vacation time:', err.message);
@@ -2175,6 +2282,7 @@ app.post('/api/vacation-time', requireRole('Business Assistant', 'Team Leader', 
       `INSERT INTO vacation_time (user_id, vacation_date, hours, vacation_type, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [user_id, vacation_date, hours || 8, vacation_type || 'Vacation', notes || null]
     );
+    logAudit('VACATION_TIME_CREATED', req.user.username, { entryId: result.rows[0].id, user_id, vacation_date });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating vacation time:', err.message);
@@ -2191,6 +2299,7 @@ app.put('/api/vacation-time/:id', requireRole('Business Assistant', 'Team Leader
       [user_id, vacation_date, hours, vacation_type, notes !== undefined ? notes : null, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    logAudit('VACATION_TIME_UPDATED', req.user.username, { entryId: req.params.id });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating vacation time:', err.message);
@@ -2203,6 +2312,7 @@ app.delete('/api/vacation-time/:id', requireRole('Business Assistant', 'Team Lea
   try {
     const result = await pool.query('DELETE FROM vacation_time WHERE id=$1 RETURNING *', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    logAudit('VACATION_TIME_DELETED', req.user.username, { entryId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting vacation time:', err.message);
