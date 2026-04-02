@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SurgicalForm } from '../types/SurgicalForm';
 import { authFetch } from '../utils/api';
+import jsPDF from 'jspdf';
+import { processScannedImage, ScanFilter } from '../utils/scannerProcess';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -15,6 +17,11 @@ const EditFormPage: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [healthCenters, setHealthCenters] = useState<any[]>([]);
+  const [editScanMode, setEditScanMode] = useState<'scan' | 'upload'>('scan');
+  const [editScannedPages, setEditScannedPages] = useState<string[]>([]);
+  const [editScanFilter, setEditScanFilter] = useState<ScanFilter>('auto');
+  const [editProcessing, setEditProcessing] = useState(false);
+  const editScanInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role') || 'Registered Surgical Assistant';
 
@@ -50,12 +57,17 @@ const EditFormPage: React.FC = () => {
     setSuccess('');
     if (!form) return;
     try {
+      let fileToUpload = selectedFile;
+      // If scan mode has pages, convert to PDF
+      if (editScanMode === 'scan' && editScannedPages.length > 0) {
+        fileToUpload = await convertEditPagesToPDF(editScannedPages);
+      }
       const formData = new FormData();
       Object.entries(form).forEach(([key, value]) => {
         formData.append(key, value as string);
       });
-      if (selectedFile) {
-        formData.append('surgeryFormFile', selectedFile);
+      if (fileToUpload) {
+        formData.append('surgeryFormFile', fileToUpload);
       }
       const res = await authFetch(`${API_URL}/${id}`, {
         method: 'PUT',
@@ -77,6 +89,51 @@ const EditFormPage: React.FC = () => {
     } catch {
       setError('Failed to update form.');
     }
+  };
+
+  const convertEditPagesToPDF = async (pages: string[]): Promise<File> => {
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0) pdf.addPage();
+      const img = new Image();
+      img.src = pages[i];
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        if (img.complete) resolve();
+      });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pageW / img.width, pageH / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      const x = (pageW - w) / 2;
+      const y = (pageH - h) / 2;
+      pdf.addImage(pages[i], 'JPEG', x, y, w, h);
+    }
+    const blob = pdf.output('blob');
+    return new File([blob], 'scanned-document.pdf', { type: 'application/pdf' });
+  };
+
+  const handleEditScanCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setEditProcessing(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target!.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+        });
+        const processed = await processScannedImage(dataUrl, editScanFilter);
+        setEditScannedPages(prev => [...prev, processed]);
+      }
+    } finally {
+      setEditProcessing(false);
+    }
+    e.target.value = '';
   };
 
   if (userRole !== 'Registered Surgical Assistant' && userRole !== 'Business Assistant') {
@@ -211,8 +268,41 @@ const EditFormPage: React.FC = () => {
               </div>
             )}
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Update Surgery Form (Image or PDF)</label>
-              <input type="file" accept="image/*,.pdf,application/pdf" onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)} />
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Update Surgery Form (Scan or Upload)</label>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <button type="button" onClick={() => { setEditScanMode('scan'); setSelectedFile(null); }} style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: editScanMode === 'scan' ? '2px solid #667eea' : '1px solid #bfc9d9', background: editScanMode === 'scan' ? '#f0f0ff' : '#fff', color: editScanMode === 'scan' ? '#667eea' : '#666', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>📷 Scan Document</button>
+                <button type="button" onClick={() => { setEditScanMode('upload'); setEditScannedPages([]); }} style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: editScanMode === 'upload' ? '2px solid #667eea' : '1px solid #bfc9d9', background: editScanMode === 'upload' ? '#f0f0ff' : '#fff', color: editScanMode === 'upload' ? '#667eea' : '#666', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>📁 Upload File</button>
+              </div>
+              {editScanMode === 'scan' ? (
+                <div>
+                  <input ref={editScanInputRef} type="file" accept="image/*" capture="environment" onChange={handleEditScanCapture} style={{ display: 'none' }} />
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                    {([['auto', 'Auto'], ['bw', 'B&W'], ['color', 'Color'], ['original', 'Original']] as [ScanFilter, string][]).map(([key, label]) => (
+                      <button key={key} type="button" onClick={() => setEditScanFilter(key)} style={{ flex: 1, padding: '6px 0', borderRadius: 5, border: editScanFilter === key ? '2px solid #667eea' : '1px solid #d0d5dd', background: editScanFilter === key ? '#eef0ff' : '#fff', color: editScanFilter === key ? '#667eea' : '#888', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>{label}</button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => editScanInputRef.current?.click()} disabled={editProcessing} style={{ width: '100%', padding: '14px 0', borderRadius: 6, border: '2px dashed #667eea', background: editProcessing ? '#e8e8f0' : '#f8f9ff', color: '#667eea', fontWeight: 600, cursor: editProcessing ? 'wait' : 'pointer', fontSize: 15, marginBottom: 8 }}>
+                    {editProcessing ? '⏳ Processing...' : (editScannedPages.length === 0 ? '📷 Scan Document' : '📷 + Scan Another Page')}
+                  </button>
+                  <div style={{ fontSize: 11, color: '#999', marginBottom: 6, textAlign: 'center' }}>Uses your phone camera as a document scanner</div>
+                  {editScannedPages.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>{editScannedPages.length} page{editScannedPages.length > 1 ? 's' : ''} scanned — will replace current file</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {editScannedPages.map((page, idx) => (
+                          <div key={idx} style={{ position: 'relative', border: '1px solid #d0d5dd', borderRadius: 6, overflow: 'hidden', width: 90, height: 116 }}>
+                            <img src={page} alt={`Page ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button type="button" onClick={() => setEditScannedPages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, fontSize: 13, cursor: 'pointer', lineHeight: '20px', fontWeight: 700 }}>×</button>
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '2px 0' }}>Page {idx + 1}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <input type="file" accept="image/*,.pdf,application/pdf" onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)} style={{ width: '100%', padding: '10px 0', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box', background: '#fff' }} />
+              )}
             </div>
             <p style={{ color: '#888', fontSize: 13 }}><b>Created By:</b> {form.createdByFullName || form.createdBy}</p>
             <p style={{ color: '#888', fontSize: 13 }}><b>Created By Email:</b> {form.createdByEmail || ''}</p>

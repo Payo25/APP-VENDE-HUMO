@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../utils/api';
 import jsPDF from 'jspdf';
+import { processScannedImage, ScanFilter } from '../utils/scannerProcess';
 
 const API_BASE_URL = '/api';
 const API_URL = `${API_BASE_URL}/forms`;
@@ -36,6 +37,8 @@ const CreateFormPage: React.FC = () => {
   const [surgeryFormFile, setSurgeryFormFile] = useState<File | null>(null);
   const [scannedPages, setScannedPages] = useState<string[]>([]);
   const [scanMode, setScanMode] = useState<'scan' | 'upload'>('scan');
+  const [scanFilter, setScanFilter] = useState<ScanFilter>('auto');
+  const [processing, setProcessing] = useState(false);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -164,21 +167,32 @@ const CreateFormPage: React.FC = () => {
     return new File([blob], 'scanned-document.pdf', { type: 'application/pdf' });
   };
 
-  const handleScanCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScanCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target?.result) {
-          setScannedPages(prev => [...prev, ev.target!.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
+    setProcessing(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target!.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+        });
+        const processed = await processScannedImage(dataUrl, scanFilter);
+        setScannedPages(prev => [...prev, processed]);
+      }
+    } finally {
+      setProcessing(false);
     }
     // Reset the input so the same file can be re-selected
     e.target.value = '';
+  };
+
+  const reprocessPages = async (newFilter: ScanFilter) => {
+    // We don't store originals, so re-filter only changes future captures
+    setScanFilter(newFilter);
   };
 
   const removePage = (index: number) => {
@@ -351,18 +365,25 @@ const CreateFormPage: React.FC = () => {
             {scanMode === 'scan' ? (
               <div>
                 <input ref={scanInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanCapture} style={{ display: 'none' }} />
-                <button type="button" onClick={() => scanInputRef.current?.click()} style={{ width: '100%', padding: '12px 0', borderRadius: 6, border: '2px dashed #667eea', background: '#f8f9ff', color: '#667eea', fontWeight: 600, cursor: 'pointer', fontSize: 15, marginBottom: 8 }}>
-                  📷 {scannedPages.length === 0 ? 'Take Photo / Scan Page' : '+ Add Another Page'}
+                {/* Scan filter selector */}
+                <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                  {([['auto', 'Auto'], ['bw', 'B&W'], ['color', 'Color'], ['original', 'Original']] as [ScanFilter, string][]).map(([key, label]) => (
+                    <button key={key} type="button" onClick={() => reprocessPages(key)} style={{ flex: 1, padding: '6px 0', borderRadius: 5, border: scanFilter === key ? '2px solid #667eea' : '1px solid #d0d5dd', background: scanFilter === key ? '#eef0ff' : '#fff', color: scanFilter === key ? '#667eea' : '#888', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>{label}</button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => scanInputRef.current?.click()} disabled={processing} style={{ width: '100%', padding: '14px 0', borderRadius: 6, border: '2px dashed #667eea', background: processing ? '#e8e8f0' : '#f8f9ff', color: '#667eea', fontWeight: 600, cursor: processing ? 'wait' : 'pointer', fontSize: 15, marginBottom: 8 }}>
+                  {processing ? '⏳ Processing...' : (scannedPages.length === 0 ? '📷 Scan Document' : '📷 + Scan Another Page')}
                 </button>
+                <div style={{ fontSize: 11, color: '#999', marginBottom: 6, textAlign: 'center' }}>Uses your phone camera as a document scanner</div>
                 {scannedPages.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>{scannedPages.length} page{scannedPages.length > 1 ? 's' : ''} scanned — will be saved as PDF</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {scannedPages.map((page, idx) => (
-                        <div key={idx} style={{ position: 'relative', border: '1px solid #d0d5dd', borderRadius: 6, overflow: 'hidden', width: 80, height: 100 }}>
+                        <div key={idx} style={{ position: 'relative', border: '1px solid #d0d5dd', borderRadius: 6, overflow: 'hidden', width: 90, height: 116 }}>
                           <img src={page} alt={`Page ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button type="button" onClick={() => removePage(idx)} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', lineHeight: '18px', fontWeight: 700 }}>×</button>
-                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '1px 0' }}>Page {idx + 1}</div>
+                          <button type="button" onClick={() => removePage(idx)} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, fontSize: 13, cursor: 'pointer', lineHeight: '20px', fontWeight: 700 }}>×</button>
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '2px 0' }}>Page {idx + 1}</div>
                         </div>
                       ))}
                     </div>
