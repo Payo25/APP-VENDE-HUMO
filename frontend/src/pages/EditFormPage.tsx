@@ -45,6 +45,13 @@ const EditFormPage: React.FC = () => {
       .catch(() => setHealthCenters([]));
   }, []);
 
+  // HIPAA: Clear scanned PHI images from memory on unmount
+  useEffect(() => {
+    return () => {
+      setEditScannedPages([]);
+    };
+  }, []);
+
   // Accept <select> as well for handleChange
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     if (!form) return;
@@ -197,15 +204,15 @@ const EditFormPage: React.FC = () => {
           <form onSubmit={handleSubmit} style={{ maxWidth: 400, margin: '0 auto', textAlign: 'left' }}>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Patient Name</label>
-              <input type="text" name="patientName" value={form.patientName} onChange={handleChange} required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+              <input type="text" name="patientName" value={form.patientName} onChange={handleChange} required autoComplete="off" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Date of Birth</label>
-              <input type="date" name="dob" value={form.dob} onChange={handleChange} required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+              <input type="date" name="dob" value={form.dob} onChange={handleChange} required autoComplete="off" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Insurance Company Name</label>
-              <input type="text" name="insuranceCompany" value={form.insuranceCompany} onChange={handleChange} required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+              <input type="text" name="insuranceCompany" value={form.insuranceCompany} onChange={handleChange} required autoComplete="off" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Health Center Name</label>

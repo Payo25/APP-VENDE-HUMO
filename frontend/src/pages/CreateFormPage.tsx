@@ -54,6 +54,13 @@ const CreateFormPage: React.FC = () => {
       .catch(() => setHealthCenters([]));
   }, []);
 
+  // HIPAA: Clear scanned PHI images from memory on unmount
+  useEffect(() => {
+    return () => {
+      setScannedPages([]);
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -115,14 +122,15 @@ const CreateFormPage: React.FC = () => {
       });
       if (!res.ok) throw new Error('Failed to create form');
       setSuccess('Form created successfully!');
-      // Audit log: create sensitive form
+      // Audit log: create sensitive form (no PHI in audit details)
+      const createdForm = await res.json();
       await authFetch(AUDIT_ACTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actor: localStorage.getItem('user'),
           action: 'CREATE_FORM',
-          details: { patientName, date }
+          details: { formId: createdForm.id, date }
         })
       });
       setTimeout(() => navigate('/forms'), 1000);
@@ -253,6 +261,7 @@ const CreateFormPage: React.FC = () => {
               value={patientName}
               onChange={e => setPatientName(e.target.value)}
               required
+              autoComplete="off"
               style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
@@ -263,6 +272,7 @@ const CreateFormPage: React.FC = () => {
               value={dob}
               onChange={e => setDob(e.target.value)}
               required
+              autoComplete="off"
               style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
@@ -273,6 +283,7 @@ const CreateFormPage: React.FC = () => {
               value={insuranceCompany}
               onChange={e => setInsuranceCompany(e.target.value)}
               required
+              autoComplete="off"
               style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>

@@ -774,7 +774,7 @@ app.post('/api/forms', requireRole('Admin', 'Business Assistant', 'Registered Su
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [encryptPHI(patientName), encryptPHI(dob), encryptPHI(insuranceCompany), healthCenterName, date, timeIn, timeOut, doctorName, encryptPHI(procedure), caseType, assistantType, firstAssistant || null, secondAssistant || null, status, createdByUserId, fileUrl, new Date().toISOString()]
     );
-    logAudit('FORM_CREATED', req.user.username, { formId: result.rows[0].id, patientName, healthCenterName });
+    logAudit('FORM_CREATED', req.user.username, { formId: result.rows[0].id, healthCenterName });
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating form:', err.message);
