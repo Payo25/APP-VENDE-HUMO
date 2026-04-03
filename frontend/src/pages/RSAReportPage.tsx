@@ -180,14 +180,14 @@ const PayrollPage: React.FC = () => {
         }
       }
       
-      const rate = assignment.rate ? parseFloat(assignment.rate) : 0;
-      return { hours: totalHours, rate };
+      const rate = assignment.rate ? Number(assignment.rate) : 0;
+      return { hours: Number(totalHours) || 0, rate: Number(rate) || 0 };
     } else {
       // Old format: array of IDs (string[])
       if (!assigned.map((id: any) => String(id)).includes(String(rsaId))) return { hours: 0, rate: 0 };
       // Fallback: 24 for weekends, 16 for weekdays (legacy logic)
       const hours = (dayOfWeek === 0 || dayOfWeek === 6) ? 24 : 16;
-      return { hours, rate: 0 };
+      return { hours: Number(hours) || 0, rate: 0 };
     }
   }
 
@@ -206,14 +206,14 @@ const PayrollPage: React.FC = () => {
       const from = parseDate(fromDate);
       const to = parseDate(toDate);
       const dateRange = getDatesInRange(from, to);
-      const userHourlyRate = rsa.hourlyRate || 3.00;
+      const userHourlyRate = Number(rsa.hourlyRate) || 3.00;
       let totalCallHour = 0, totalShiftLT3 = 0, totalShiftGT3 = 0, totalVoluntary = 0, totalCancelled = 0, totalVacation = 0;
       let callHourPay = 0;
       dateRange.forEach(date => {
         const dayName = getDayName(date);
         const callData = getCallHourData(rsa.id, date);
         const callHour = callData.hours > 0 ? callData.hours.toString() : '';
-        const effectiveRate = callData.rate > 0 ? callData.rate : userHourlyRate;
+        const effectiveRate = Number(callData.rate) > 0 ? Number(callData.rate) : userHourlyRate;
         const rsaId = rsa.id;
         // Create date string in YYYY-MM-DD format for comparison
         const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
@@ -322,11 +322,11 @@ const PayrollPage: React.FC = () => {
         const totalCancelled = rows.reduce((sum, r) => sum + r.cancelled, 0);
         const totalVacation = rows.reduce((sum, r) => sum + r.vacHours, 0);
         // Payment calculations — use per-assignment rate from call hours planner (falls back to user hourly rate)
-        const userHourlyRate = rsa.hourlyRate || 3.00;
+        const userHourlyRate = Number(rsa.hourlyRate) || 3.00;
         // Sum call hour pay using each day's assignment rate
         const callHourPay = rows.reduce((sum, r) => {
           if (!r.callHours) return sum;
-          const rate = r.callRate > 0 ? r.callRate : userHourlyRate;
+          const rate = Number(r.callRate) > 0 ? Number(r.callRate) : userHourlyRate;
           return sum + (r.callHours * rate);
         }, 0);
         const shiftLT3Pay = totalShiftLT3 * 100;
@@ -360,7 +360,7 @@ const PayrollPage: React.FC = () => {
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{formatDate(row.date)}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.dayName}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.callHour}</td>
-                    <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${row.callRate > 0 ? row.callRate.toFixed(2) : (userHourlyRate).toFixed(2)}</td>
+                    <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>${Number(row.callRate) > 0 ? Number(row.callRate).toFixed(2) : Number(userHourlyRate).toFixed(2)}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.shiftLT3}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.shiftGT3}</td>
                     <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>{row.voluntary}</td>
