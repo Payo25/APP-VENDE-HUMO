@@ -32,7 +32,7 @@ const CallHoursPage: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   // Assignments store array of objects: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, healthCenters?: string[], assignmentRole?: string }
   const [assignments, setAssignments] = useState<{ [day: string]: { id: string, shift: 'F' | 'H', hours?: number, minutes?: number, healthCenter?: string, healthCenters?: string[], assignmentRole?: string }[] }>({});
-  const [healthCenters, setHealthCenters] = useState<{ id: number; name: string }[]>([]);
+  const [healthCenters, setHealthCenters] = useState<{ id: number; name: string; oncall_rate?: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -101,7 +101,7 @@ const CallHoursPage: React.FC = () => {
     setAssignments(prev => {
       const prevList = prev[dateKey] || [];
       if (prevList.some((a: any) => String(a.id) === String(rsaId))) return prev;
-      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', healthCenters: [], assignmentRole: 'On Call' }] };
+      return { ...prev, [dateKey]: [...prevList, { id: String(rsaId), shift: 'F', hours: defaultHours, minutes: 0, healthCenter: '', healthCenters: [], assignmentRole: 'On Call', rate: 0 }] };
     });
   };
 
@@ -115,7 +115,11 @@ const CallHoursPage: React.FC = () => {
           if (String(a.id) !== String(rsaId)) return a;
           const hcs = [...(a.healthCenters || [])];
           hcs[index] = value;
-          return { ...a, healthCenters: hcs, healthCenter: hcs[0] || '' };
+          // Auto-fill rate from the first health center's oncall_rate
+          const primaryHC = hcs.find(Boolean);
+          const hcData = healthCenters.find(h => h.name === primaryHC);
+          const rate = hcData?.oncall_rate ? parseFloat(String(hcData.oncall_rate)) : (a.rate || 0);
+          return { ...a, healthCenters: hcs, healthCenter: hcs[0] || '', rate };
         })
       };
     });
@@ -174,6 +178,19 @@ const CallHoursPage: React.FC = () => {
         ...prev,
         [dateKey]: prevList.map((a: any) => 
           String(a.id) === String(rsaId) ? { ...a, hours } : a
+        )
+      };
+    });
+  };
+
+  const handleUpdateRate = (day: number, rsaId: string, rate: number) => {
+    const dateKey = getDateString(year, month, day);
+    setAssignments(prev => {
+      const prevList = prev[dateKey] || [];
+      return {
+        ...prev,
+        [dateKey]: prevList.map((a: any) => 
+          String(a.id) === String(rsaId) ? { ...a, rate } : a
         )
       };
     });
@@ -403,23 +420,29 @@ cells.push(
                                     </div>
                                     {/* Role selector */}
                                     {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
-                                      <select
-                                        value={a.assignmentRole || 'On Call'}
-                                        onChange={e => handleUpdateRole(thisDay, a.id, e.target.value)}
-                                        style={{
-                                          fontSize: 11, padding: '2px 3px', borderRadius: 4,
-                                          border: `2px solid ${a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'}`,
-                                          background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : a.assignmentRole === 'Vacation' ? '#f0fdf4' : a.assignmentRole === 'PTO' ? '#faf5ff' : '#fffbeb',
-                                          cursor: 'pointer', width: '100%', marginTop: 2, fontWeight: 600,
-                                          color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'
-                                        }}
-                                      >
-                                        <option value="On Call">🟠 On Call</option>
-                                        <option value="1st Assistant">🟣 1st Assistant</option>
-                                        <option value="2nd Assistant">🔵 2nd Assistant</option>
-                                        <option value="Vacation">🌴 Vacation</option>
-                                        <option value="PTO">📋 PTO</option>
-                                      </select>
+                                      <div>
+                                        <select
+                                          value={a.assignmentRole || 'On Call'}
+                                          onChange={e => handleUpdateRole(thisDay, a.id, e.target.value)}
+                                          style={{
+                                            fontSize: 11, padding: '2px 3px', borderRadius: 4,
+                                            border: `2px solid ${a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'}`,
+                                            background: a.assignmentRole === '1st Assistant' ? '#f5f3ff' : a.assignmentRole === '2nd Assistant' ? '#ecfeff' : a.assignmentRole === 'Vacation' ? '#f0fdf4' : a.assignmentRole === 'PTO' ? '#faf5ff' : '#fffbeb',
+                                            cursor: 'pointer', width: '100%', marginTop: 2, fontWeight: 600,
+                                            color: a.assignmentRole === '1st Assistant' ? '#7c3aed' : a.assignmentRole === '2nd Assistant' ? '#0891b2' : a.assignmentRole === 'Vacation' ? '#15803d' : a.assignmentRole === 'PTO' ? '#7c3aed' : '#d97706'
+                                          }}
+                                        >
+                                          <option value="On Call">🟠 On Call</option>
+                                          <option value="1st Assistant">🟣 1st Assistant</option>
+                                          <option value="2nd Assistant">🔵 2nd Assistant</option>
+                                          <option value="Vacation">🌴 Vacation</option>
+                                          <option value="PTO">📋 PTO</option>
+                                        </select>
+                                        {/* Silver Cross condition note */}
+                                        {(a.healthCenters || []).some((hc: string) => hc === 'Silver Cross Hospital') && (
+                                          <div style={{ fontSize: 9, color: '#7c3aed', fontStyle: 'italic', marginTop: 1 }}>⚠️ Silver Cross: 1st/2nd Asst matters</div>
+                                        )}
+                                      </div>
                                     ) : (
                                       <div style={{
                                         fontSize: 11, fontWeight: 700, marginTop: 2, padding: '1px 4px', borderRadius: 4, display: 'inline-block',
@@ -507,6 +530,36 @@ cells.push(
                                         <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>
                                           {a.hours || 24}h {a.minutes ? `${a.minutes}m` : ''}
                                         </span>
+                                      )}
+                                    </div>
+                                    {/* Rate display */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                      {(userRole === 'Business Assistant' || userRole === 'Team Leader' || userRole === 'Scheduler') && !exportingPDF && isEditMode ? (
+                                        <>
+                                          <span style={{ fontSize: 11, color: '#185a9d' }}>$</span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={a.rate || 0}
+                                            onChange={(e) => handleUpdateRate(thisDay, a.id, parseFloat(e.target.value) || 0)}
+                                            style={{
+                                              fontSize: 11,
+                                              width: 50,
+                                              padding: '2px 3px',
+                                              borderRadius: 4,
+                                              border: '1px solid #d1d5db',
+                                              background: '#fff'
+                                            }}
+                                          />
+                                          <span style={{ fontSize: 10, color: '#999' }}>/hr</span>
+                                        </>
+                                      ) : (
+                                        a.rate ? (
+                                          <span style={{ fontSize: 11, color: '#185a9d', fontWeight: 600 }}>
+                                            💲{parseFloat(a.rate).toFixed(2)}/hr
+                                          </span>
+                                        ) : null
                                       )}
                                     </div>
                                   </li>

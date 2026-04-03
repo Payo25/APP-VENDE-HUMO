@@ -12,6 +12,7 @@ const HealthCentersPage: React.FC = () => {
   const [fax, setFax] = useState('');
   const [email, setEmail] = useState('');
   const [contactPerson, setContactPerson] = useState('');
+  const [oncallRate, setOncallRate] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editing, setEditing] = useState<any>(null);
@@ -21,6 +22,7 @@ const HealthCentersPage: React.FC = () => {
   const [editFax, setEditFax] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editContactPerson, setEditContactPerson] = useState('');
+  const [editOncallRate, setEditOncallRate] = useState('');
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
   const navigate = useNavigate();
 
@@ -42,11 +44,11 @@ const HealthCentersPage: React.FC = () => {
     const res = await authFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address, phone, fax, email, contactPerson })
+      body: JSON.stringify({ name, address, phone, fax, email, contactPerson, oncallRate: parseFloat(oncallRate) || 0 })
     });
     if (res.ok) {
       setSuccess('Health center created.');
-      setName(''); setAddress(''); setPhone(''); setFax(''); setEmail(''); setContactPerson('');
+      setName(''); setAddress(''); setPhone(''); setFax(''); setEmail(''); setContactPerson(''); setOncallRate('');
     } else {
       setError('Failed to create health center.');
     }
@@ -69,7 +71,8 @@ const HealthCentersPage: React.FC = () => {
     setEditPhone(hc.phone || '');
     setEditFax(hc.fax || '');
     setEditEmail(hc.email || '');
-    setEditContactPerson(hc.contactPerson || '');
+    setEditContactPerson(hc.contactPerson || hc.contact_person || '');
+    setEditOncallRate(hc.oncall_rate != null ? String(hc.oncall_rate) : '');
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -82,7 +85,7 @@ const HealthCentersPage: React.FC = () => {
     const res = await authFetch(`${API_URL}/${editing.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName, address: editAddress, phone: editPhone, fax: editFax, email: editEmail, contactPerson: editContactPerson })
+      body: JSON.stringify({ name: editName, address: editAddress, phone: editPhone, fax: editFax, email: editEmail, contactPerson: editContactPerson, oncallRate: parseFloat(editOncallRate) || 0 })
     });
     if (res.ok) {
       setSuccess('Health center updated.');
@@ -155,12 +158,13 @@ const HealthCentersPage: React.FC = () => {
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Fax</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Email</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Contact Person</th>
+                <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>On-Call Rate</th>
                 <th style={{ padding: 8, borderBottom: '1px solid #e2e8f0' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {healthCenters.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: 16, color: '#888' }}>No health centers found.</td></tr>
+                <tr><td colSpan={8} style={{ padding: 16, color: '#888' }}>No health centers found.</td></tr>
               )}
               {healthCenters.map(hc => (
                 <tr key={hc.id}>
@@ -169,7 +173,8 @@ const HealthCentersPage: React.FC = () => {
                   <td style={{ padding: 8 }}>{hc.phone}</td>
                   <td style={{ padding: 8 }}>{hc.fax}</td>
                   <td style={{ padding: 8 }}>{hc.email}</td>
-                  <td style={{ padding: 8 }}>{hc.contactPerson}</td>
+                  <td style={{ padding: 8 }}>{hc.contactPerson || hc.contact_person}</td>
+                  <td style={{ padding: 8, fontWeight: 600, color: '#185a9d' }}>${parseFloat(hc.oncall_rate || 0).toFixed(2)}/hr</td>
                   <td style={{ padding: 8 }}>
                     <button onClick={() => openEdit(hc)} style={{ padding: '6px 16px', borderRadius: 6, background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginRight: 8 }}>✏</button>
                     <button onClick={() => handleDelete(hc.id)} style={{ padding: '6px 16px', borderRadius: 6, background: 'linear-gradient(90deg, #e74c3c 0%, #e67e22 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>❌</button>
@@ -208,6 +213,10 @@ const HealthCentersPage: React.FC = () => {
                     <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Contact Person</label>
                     <input type="text" value={editContactPerson} onChange={e => setEditContactPerson(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>On-Call Rate ($/hr)</label>
+                    <input type="number" step="0.01" min="0" value={editOncallRate} onChange={e => setEditOncallRate(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button type="button" onClick={() => setEditing(null)} style={{ padding: '8px 20px', borderRadius: 6, background: '#eee', color: '#2d3a4b', border: 'none', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Cancel</button>
                     <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Save</button>
@@ -245,6 +254,10 @@ const HealthCentersPage: React.FC = () => {
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>Contact Person</label>
               <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 6, color: '#2d3a4b', fontWeight: 500 }}>On-Call Rate ($/hr)</label>
+              <input type="number" step="0.01" min="0" value={oncallRate} onChange={e => setOncallRate(e.target.value)} placeholder="0.00" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #bfc9d9', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <button type="submit" style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(90deg, #43cea2 0%, #185a9d 100%)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>Create Health Center</button>
           </form>

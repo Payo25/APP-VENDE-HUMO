@@ -241,8 +241,13 @@ const InvoicesPage: React.FC = () => {
           roleGroups[role].dateTotals[dateKey] += decimalH;
           roleGroups[role].totalHours += decimalH;
           if (roleGroups[role].unitPrice === 0) {
-            const user = allUsers.find(u => String(u.id) === String(entry.id));
-            roleGroups[role].unitPrice = user?.hourlyRate || 3.00;
+            // Use per-assignment rate (from health center oncall_rate) first, fall back to user hourly rate
+            if (entry.rate && entry.rate > 0) {
+              roleGroups[role].unitPrice = entry.rate;
+            } else {
+              const user = allUsers.find(u => String(u.id) === String(entry.id));
+              roleGroups[role].unitPrice = user?.hourlyRate || 3.00;
+            }
           }
         }
       }

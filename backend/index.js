@@ -286,6 +286,12 @@ async function migrateDatabase() {
       ADD COLUMN IF NOT EXISTS email VARCHAR(255);
     `);
 
+    // Add oncall_rate column to health_centers for per-hospital on-call hourly rates
+    await pool.query(`
+      ALTER TABLE health_centers
+      ADD COLUMN IF NOT EXISTS oncall_rate DECIMAL(10,2) DEFAULT 0;
+    `);
+
     // Add fax column to physicians if it doesn't exist
     await pool.query(`
       ALTER TABLE physicians 
@@ -1268,12 +1274,12 @@ app.get('/api/health-centers', requireRole('Admin', 'Business Assistant', 'Regis
 });
 
 app.post('/api/health-centers', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
-  const { name, address, phone, fax, email, contactPerson } = req.body;
+  const { name, address, phone, fax, email, contactPerson, oncallRate } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
     const result = await pool.query(
-      'INSERT INTO health_centers (name, address, phone, fax, email, contact_person) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [name, address || '', phone || '', fax || '', email || '', contactPerson || '']
+      'INSERT INTO health_centers (name, address, phone, fax, email, contact_person, oncall_rate) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [name, address || '', phone || '', fax || '', email || '', contactPerson || '', oncallRate || 0]
     );
     logAudit('HEALTH_CENTER_CREATED', req.user.username, { id: result.rows[0].id, name });
     res.status(201).json(result.rows[0]);
@@ -1283,12 +1289,12 @@ app.post('/api/health-centers', requireRole('Business Assistant', 'Scheduler'), 
 });
 
 app.put('/api/health-centers/:id', requireRole('Business Assistant', 'Scheduler'), async (req, res) => {
-  const { name, address, phone, fax, email, contactPerson } = req.body;
+  const { name, address, phone, fax, email, contactPerson, oncallRate } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
     const result = await pool.query(
-      'UPDATE health_centers SET name=$1, address=$2, phone=$3, fax=$4, email=$5, contact_person=$6 WHERE id=$7 RETURNING *',
-      [name, address || '', phone || '', fax || '', email || '', contactPerson || '', req.params.id]
+      'UPDATE health_centers SET name=$1, address=$2, phone=$3, fax=$4, email=$5, contact_person=$6, oncall_rate=$7 WHERE id=$8 RETURNING *',
+      [name, address || '', phone || '', fax || '', email || '', contactPerson || '', oncallRate || 0, req.params.id]
     );
     logAudit('HEALTH_CENTER_UPDATED', req.user.username, { id: req.params.id, name });
     res.json(result.rows[0]);
