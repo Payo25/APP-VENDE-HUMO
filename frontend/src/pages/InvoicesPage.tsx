@@ -211,7 +211,7 @@ const InvoicesPage: React.FC = () => {
         allAssignments = { ...allAssignments, ...data };
       }
 
-      const isSilverCross = hcName === 'Silver Cross Hospital';
+      const isSilverCross = hcName === 'Silver Cross Surgery Center';
 
       // Group by assignmentRole
       const roleGroups: { [role: string]: { dateTotals: { [dateKey: string]: number }, totalHours: number, unitPrice: number } } = {};
@@ -550,8 +550,8 @@ const InvoicesPage: React.FC = () => {
             <thead>
               <tr style={{ background: '#1a237e', color: '#fff' }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>Description</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, width: 70 }}>Qty</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>Unit Price</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, width: 70 }}>{viewInvoice.healthCenterName === 'Silver Cross Surgery Center' ? 'Hours' : 'Qty'}</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>{viewInvoice.healthCenterName === 'Silver Cross Surgery Center' ? 'Rate/Hr' : 'Unit Price'}</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>Total Price</th>
               </tr>
             </thead>
@@ -682,8 +682,8 @@ const InvoicesPage: React.FC = () => {
                     <option key={hc.id} value={hc.name}>{hc.name}</option>
                   ))}
                 </select>
-                {callHoursHC === 'Silver Cross Hospital' && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#667eea', fontStyle: 'italic' }}>Silver Cross Hospital: will split by 1st Assistant &amp; 2nd Assistant</div>
+                {callHoursHC === 'Silver Cross Surgery Center' && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#667eea', fontStyle: 'italic' }}>Silver Cross Surgery Center: will split by 1st Assistant &amp; 2nd Assistant</div>
                 )}
               </div>
               <button
@@ -708,8 +708,8 @@ const InvoicesPage: React.FC = () => {
                 <thead>
                   <tr style={{ background: '#1a237e', color: '#fff' }}>
                     <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13 }}>Description</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, width: 80 }}>Qty</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>Unit Price</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, width: 80 }}>{healthCenterName === 'Silver Cross Surgery Center' ? 'Hours' : 'Qty'}</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>{healthCenterName === 'Silver Cross Surgery Center' ? 'Rate/Hr' : 'Unit Price'}</th>
                     <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>Total</th>
                     <th style={{ padding: '10px 12px', width: 50 }}></th>
                   </tr>

@@ -439,7 +439,7 @@ cells.push(
                                           <option value="PTO">📋 PTO</option>
                                         </select>
                                         {/* Silver Cross condition note */}
-                                        {(a.healthCenters || []).some((hc: string) => hc === 'Silver Cross Hospital') && (
+                                        {(a.healthCenters || []).some((hc: string) => hc === 'Silver Cross Surgery Center') && (
                                           <div style={{ fontSize: 9, color: '#7c3aed', fontStyle: 'italic', marginTop: 1 }}>⚠️ Silver Cross: 1st/2nd Asst matters</div>
                                         )}
                                       </div>
