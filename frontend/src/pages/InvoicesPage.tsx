@@ -32,6 +32,7 @@ interface HealthCenter {
   id: number;
   name: string;
   address: string;
+  oncall_rate?: number;
 }
 
 const emptyLine: LineItem = { description: '', qty: 1, unitPrice: 0, totalPrice: 0 };
@@ -245,8 +246,15 @@ const InvoicesPage: React.FC = () => {
           if (entryRate > 0) {
             roleGroups[role].unitPrice = entryRate;
           } else if (roleGroups[role].unitPrice === 0) {
-            const user = allUsers.find(u => String(u.id) === String(entry.id));
-            roleGroups[role].unitPrice = Number(user?.hourlyRate) || 3.00;
+            // Fall back to health center's oncall_rate, then user hourly rate
+            const hc = healthCenters.find(h => h.name === hcName);
+            const hcRate = Number(hc?.oncall_rate) || 0;
+            if (hcRate > 0) {
+              roleGroups[role].unitPrice = hcRate;
+            } else {
+              const user = allUsers.find(u => String(u.id) === String(entry.id));
+              roleGroups[role].unitPrice = Number(user?.hourlyRate) || 3.00;
+            }
           }
         }
       }
