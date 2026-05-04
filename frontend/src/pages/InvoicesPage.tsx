@@ -80,6 +80,18 @@ const InvoicesPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
+  const isSilverCrossCenter = (name?: string) =>
+    String(name || '').toLowerCase().includes('silver cross');
+
+  const normalizeAssignmentRole = (role?: string) => {
+    const value = String(role || '').toLowerCase().trim();
+    if (value.includes('1st') || value.includes('first')) return '1st Assistant';
+    if (value.includes('2nd') || value.includes('second')) return '2nd Assistant';
+    if (value === 'vacation') return 'Vacation';
+    if (value === 'pto') return 'PTO';
+    return 'On Call';
+  };
+
   useEffect(() => {
     if (userRole !== 'Business Assistant' && userRole !== 'Admin') {
       navigate('/dashboard');
@@ -211,7 +223,7 @@ const InvoicesPage: React.FC = () => {
         allAssignments = { ...allAssignments, ...data };
       }
 
-      const isSilverCross = hcName === 'Silver Cross Surgery Center';
+      const isSilverCross = isSilverCrossCenter(hcName);
 
       // Group by assignmentRole
       const roleGroups: { [role: string]: { dateTotals: { [dateKey: string]: number }, totalHours: number, unitPrice: number } } = {};
@@ -226,8 +238,11 @@ const InvoicesPage: React.FC = () => {
           const entryHCs: string[] = entry.healthCenters && entry.healthCenters.length > 0
             ? entry.healthCenters
             : (entry.healthCenter ? [entry.healthCenter] : []);
-          if (!entryHCs.includes(hcName)) continue;
-          let role = entry.assignmentRole || 'On Call';
+          const hasMatchingHealthCenter = isSilverCross
+            ? entryHCs.some((name: string) => isSilverCrossCenter(name))
+            : entryHCs.includes(hcName);
+          if (!hasMatchingHealthCenter) continue;
+          let role = normalizeAssignmentRole(entry.assignmentRole);
           // For non-Silver Cross, collapse all roles into 'On Call'
           if (!isSilverCross) {
             role = 'On Call';
@@ -247,7 +262,9 @@ const InvoicesPage: React.FC = () => {
             roleGroups[role].unitPrice = entryRate;
           } else if (roleGroups[role].unitPrice === 0) {
             // Fall back to health center's oncall_rate, then user hourly rate
-            const hc = healthCenters.find(h => h.name === hcName);
+            const hc = isSilverCross
+              ? healthCenters.find(h => isSilverCrossCenter(h.name))
+              : healthCenters.find(h => h.name === hcName);
             const hcRate = Number(hc?.oncall_rate) || 0;
             if (hcRate > 0) {
               roleGroups[role].unitPrice = hcRate;
@@ -261,7 +278,7 @@ const InvoicesPage: React.FC = () => {
 
       const roleKeys = Object.keys(roleGroups);
       if (roleKeys.length > 0) {
-        const roleOrder = ['1st Assistant', '2nd Assistant', 'On Call'];
+        const roleOrder = ['1st Assistant', '2nd Assistant', 'On Call', 'Vacation', 'PTO'];
         roleKeys.sort((a, b) => {
           const ai = roleOrder.indexOf(a);
           const bi = roleOrder.indexOf(b);
@@ -550,8 +567,8 @@ const InvoicesPage: React.FC = () => {
             <thead>
               <tr style={{ background: '#1a237e', color: '#fff' }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>Description</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, width: 70 }}>{viewInvoice.healthCenterName === 'Silver Cross Surgery Center' ? 'Hours' : 'Qty'}</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>{viewInvoice.healthCenterName === 'Silver Cross Surgery Center' ? 'Rate/Hr' : 'Unit Price'}</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, width: 70 }}>{isSilverCrossCenter(viewInvoice.healthCenterName) ? 'Hours' : 'Qty'}</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>{isSilverCrossCenter(viewInvoice.healthCenterName) ? 'Rate/Hr' : 'Unit Price'}</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, width: 120 }}>Total Price</th>
               </tr>
             </thead>
@@ -682,7 +699,7 @@ const InvoicesPage: React.FC = () => {
                     <option key={hc.id} value={hc.name}>{hc.name}</option>
                   ))}
                 </select>
-                {callHoursHC === 'Silver Cross Surgery Center' && (
+                {isSilverCrossCenter(callHoursHC) && (
                   <div style={{ marginTop: 6, fontSize: 12, color: '#667eea', fontStyle: 'italic' }}>Silver Cross Surgery Center: will split by 1st Assistant &amp; 2nd Assistant</div>
                 )}
               </div>
@@ -708,8 +725,8 @@ const InvoicesPage: React.FC = () => {
                 <thead>
                   <tr style={{ background: '#1a237e', color: '#fff' }}>
                     <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13 }}>Description</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, width: 80 }}>{healthCenterName === 'Silver Cross Surgery Center' ? 'Hours' : 'Qty'}</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>{healthCenterName === 'Silver Cross Surgery Center' ? 'Rate/Hr' : 'Unit Price'}</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, width: 80 }}>{isSilverCrossCenter(healthCenterName) ? 'Hours' : 'Qty'}</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>{isSilverCrossCenter(healthCenterName) ? 'Rate/Hr' : 'Unit Price'}</th>
                     <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, width: 120 }}>Total</th>
                     <th style={{ padding: '10px 12px', width: 50 }}></th>
                   </tr>
