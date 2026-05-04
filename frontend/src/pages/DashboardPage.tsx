@@ -274,6 +274,31 @@ const DashboardPage: React.FC = () => {
               📧 RSA Emails
             </a>
           )}
+          {(localStorage.getItem('role') === 'Scheduler' || localStorage.getItem('role') === 'Business Assistant' || localStorage.getItem('role') === 'Admin') && (
+            <a
+              href="/my-documents"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 0',
+                background: 'linear-gradient(90deg, #0f766e 0%, #155e75 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(15,118,110,0.08)',
+                transition: 'background 0.2s',
+                marginBottom: 12
+              }}
+              tabIndex={0}
+              aria-label="Manage RSA Documents"
+            >
+              🪪 RSA Documents
+            </a>
+          )}
           {localStorage.getItem('role') === 'Business Assistant' && (
             <a
               href="/invoices"

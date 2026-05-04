@@ -18,6 +18,7 @@ interface RsaDocument {
 const RsaDocumentsPage: React.FC = () => {
   const navigate = useNavigate();
   const role = localStorage.getItem('role');
+  const isAdminView = role === 'Business Assistant' || role === 'Scheduler' || role === 'Admin';
 
   const [documents, setDocuments] = useState<RsaDocument[]>([]);
   const [documentType, setDocumentType] = useState('ID');
@@ -28,6 +29,9 @@ const RsaDocumentsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
+  const [expiryFilter, setExpiryFilter] = useState<'all' | '30' | '90' | 'expired'>('all');
+  const [nameFilter, setNameFilter] = useState('');
 
   const canAccess =
     role === 'Registered Surgical Assistant' ||
@@ -123,6 +127,37 @@ const RsaDocumentsPage: React.FC = () => {
     return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  const handleSendReminder = async (doc: RsaDocument) => {
+    setError('');
+    setSuccess('');
+    setSendingReminderId(doc.id);
+    try {
+      const daysLeft = getDaysLeft(doc.expiryDate);
+      const notificationType = daysLeft !== null && daysLeft <= 30 ? '1_month' : '3_month';
+      const res = await authFetch(`${API_BASE_URL}/rsa-documents/${doc.id}/send-reminder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationType }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to send reminder');
+      setSuccess(`Reminder sent for ${doc.documentType} (${doc.userFullName}).`);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send reminder');
+    } finally {
+      setSendingReminderId(null);
+    }
+  };
+
+  const filteredDocuments = documents.filter((doc) => {
+    const daysLeft = getDaysLeft(doc.expiryDate);
+    if (expiryFilter === 'expired' && (daysLeft === null || daysLeft >= 0)) return false;
+    if (expiryFilter === '30' && (daysLeft === null || daysLeft < 0 || daysLeft > 30)) return false;
+    if (expiryFilter === '90' && (daysLeft === null || daysLeft < 0 || daysLeft > 90)) return false;
+    if (nameFilter.trim() && !String(doc.userFullName || '').toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div className="responsive-card" style={{ marginTop: 40, maxWidth: 1100, width: '100%' }}>
       <button
@@ -143,9 +178,11 @@ const RsaDocumentsPage: React.FC = () => {
         ← Back to Dashboard
       </button>
 
-      <h2>My Documents</h2>
+      <h2>{isAdminView ? 'RSA Documents' : 'My Documents'}</h2>
       <p style={{ color: '#4a5568', marginBottom: 20 }}>
-        Upload personal documents (ID, board certificate, etc.) with issue and expiry dates.
+        {isAdminView
+          ? 'View uploaded RSA documents, filter by expiry windows, and send reminders.'
+          : 'Upload personal documents (ID, board certificate, etc.) with issue and expiry dates.'}
       </p>
 
       {error && <p style={{ color: 'red', marginBottom: 12 }}>{error}</p>}
@@ -218,16 +255,47 @@ const RsaDocumentsPage: React.FC = () => {
         </button>
       </form>
 
+      {isAdminView && (
+        <div style={{ marginBottom: 16, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>Expiry Filter</label>
+              <select
+                value={expiryFilter}
+                onChange={(e) => setExpiryFilter(e.target.value as 'all' | '30' | '90' | 'expired')}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 14 }}
+              >
+                <option value="all">All</option>
+                <option value="30">Expiring in 30 days</option>
+                <option value="90">Expiring in 90 days</option>
+                <option value="expired">Already expired</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontWeight: 600, fontSize: 14, display: 'block', marginBottom: 4 }}>RSA Name</label>
+              <input
+                type="text"
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Filter by RSA name"
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 6, fontSize: 14 }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <h3 style={{ marginBottom: 10 }}>Submitted Documents</h3>
       {loading ? (
         <p>Loading...</p>
-      ) : documents.length === 0 ? (
+      ) : filteredDocuments.length === 0 ? (
         <p style={{ color: '#64748b' }}>No documents submitted yet.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
             <thead>
               <tr style={{ background: '#1a237e', color: '#fff' }}>
+                {isAdminView && <th style={{ padding: 8, textAlign: 'left' }}>RSA</th>}
                 <th style={{ padding: 8, textAlign: 'left' }}>Type</th>
                 <th style={{ padding: 8, textAlign: 'left' }}>Issue Date</th>
                 <th style={{ padding: 8, textAlign: 'left' }}>Expiry Date</th>
@@ -237,7 +305,7 @@ const RsaDocumentsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc) => {
+              {filteredDocuments.map((doc) => {
                 const daysLeft = getDaysLeft(doc.expiryDate);
                 const statusColor = daysLeft !== null && daysLeft <= 30
                   ? '#dc2626'
@@ -252,6 +320,7 @@ const RsaDocumentsPage: React.FC = () => {
 
                 return (
                   <tr key={doc.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    {isAdminView && <td style={{ padding: 8, fontWeight: 600 }}>{doc.userFullName}</td>}
                     <td style={{ padding: 8 }}>{doc.documentType}</td>
                     <td style={{ padding: 8 }}>{doc.issueDate}</td>
                     <td style={{ padding: 8 }}>{doc.expiryDate}</td>
@@ -262,21 +331,41 @@ const RsaDocumentsPage: React.FC = () => {
                       </a>
                     </td>
                     <td style={{ padding: 8 }}>
-                      <button
-                        onClick={() => handleDelete(doc.id)}
-                        style={{
-                          padding: '6px 10px',
-                          background: '#ef4444',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {isAdminView && (
+                          <button
+                            onClick={() => handleSendReminder(doc)}
+                            disabled={sendingReminderId === doc.id}
+                            style={{
+                              padding: '6px 10px',
+                              background: sendingReminderId === doc.id ? '#94a3b8' : '#2563eb',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: sendingReminderId === doc.id ? 'not-allowed' : 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {sendingReminderId === doc.id ? 'Sending...' : 'Send Reminder'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(doc.id)}
+                          style={{
+                            padding: '6px 10px',
+                            background: '#ef4444',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

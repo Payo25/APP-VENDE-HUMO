@@ -1898,6 +1898,62 @@ app.delete('/api/rsa-documents/:id', requireRole('Admin', 'Business Assistant', 
   }
 });
 
+app.post('/api/rsa-documents/:id/send-reminder', requireRole('Admin', 'Business Assistant', 'Scheduler'), async (req, res) => {
+  const { notificationType } = req.body || {};
+  try {
+    const result = await pool.query(
+      `SELECT d.id, d.user_id, d.document_type, d.issue_date, d.expiry_date, d.file_url, u.fullname
+       FROM rsa_documents d
+       JOIN users u ON u.id = d.user_id
+       WHERE d.id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
+
+    const doc = result.rows[0];
+    const recipients = await getDocumentReminderRecipients(doc.user_id);
+    if (recipients.length === 0) {
+      return res.status(400).json({ error: 'No recipient emails configured for this document.' });
+    }
+
+    const now = new Date();
+    const expiry = new Date(`${doc.expiry_date}T00:00:00`);
+    const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const type = notificationType === '1_month' || notificationType === '3_month'
+      ? notificationType
+      : (daysUntilExpiry <= 30 ? '1_month' : '3_month');
+
+    const timingText = type === '3_month' ? 'within 3 months' : 'within 1 month';
+    const subject = `Document Expiry Reminder: ${doc.document_type} (${doc.fullname})`;
+    const message = `
+      <h2>Document Expiry Reminder</h2>
+      <p>A submitted RSA document is expiring ${timingText}.</p>
+      <p><strong>RSA:</strong> ${escapeHtml(doc.fullname)}</p>
+      <p><strong>Document:</strong> ${escapeHtml(doc.document_type)}</p>
+      <p><strong>Issue Date:</strong> ${escapeHtml(String(doc.issue_date || ''))}</p>
+      <p><strong>Expiry Date:</strong> ${escapeHtml(String(doc.expiry_date || ''))}</p>
+      <p><strong>Days Remaining:</strong> ${daysUntilExpiry}</p>
+      <p><a href="${escapeHtml(doc.file_url)}" target="_blank" rel="noopener noreferrer">View Document</a></p>
+    `;
+
+    await sendEmailNotification(subject, message, recipients);
+    await pool.query(
+      'INSERT INTO rsa_document_notifications (document_id, notification_type) VALUES ($1, $2) ON CONFLICT (document_id, notification_type) DO NOTHING',
+      [doc.id, type]
+    );
+
+    logAudit('RSA_DOCUMENT_REMINDER_SENT', req.user.username, {
+      documentId: doc.id,
+      notificationType: type,
+      recipientsCount: recipients.length,
+    });
+    res.json({ success: true, notificationType: type, recipientsCount: recipients.length });
+  } catch (err) {
+    console.error('RSA document reminder send error:', err.message);
+    res.status(500).json({ error: 'Failed to send reminder.' });
+  }
+});
+
 // ========== INVOICES ENDPOINTS ==========
 app.get('/api/invoices', requireRole('Business Assistant'), async (req, res) => {
   try {
