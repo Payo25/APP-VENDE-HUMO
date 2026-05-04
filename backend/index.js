@@ -332,6 +332,32 @@ async function migrateDatabase() {
       );
     `);
 
+    // Create rsa_documents table for RSA credential uploads (ID, board cert, etc.)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rsa_documents (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        document_type VARCHAR(255) NOT NULL,
+        issue_date DATE NOT NULL,
+        expiry_date DATE NOT NULL,
+        file_url TEXT NOT NULL,
+        original_file_name VARCHAR(255),
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        lastmodified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Track sent expiry notifications to avoid duplicate 3-month/1-month emails
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rsa_document_notifications (
+        id SERIAL PRIMARY KEY,
+        document_id INTEGER REFERENCES rsa_documents(id) ON DELETE CASCADE,
+        notification_type VARCHAR(20) NOT NULL,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(document_id, notification_type)
+      );
+    `);
+
     // Create vacation_time table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS vacation_time (
@@ -470,15 +496,24 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 }
 
 // Helper function to send email notification
-async function sendEmailNotification(subject, message) {
-  if (!process.env.SENDGRID_API_KEY || !process.env.NOTIFICATION_EMAIL_TO) {
+async function sendEmailNotification(subject, message, recipients) {
+  if (!process.env.SENDGRID_API_KEY) {
     console.log('Email notification skipped (not configured)');
+    return;
+  }
+
+  const toList = Array.isArray(recipients) && recipients.length > 0
+    ? recipients
+    : (process.env.NOTIFICATION_EMAIL_TO ? process.env.NOTIFICATION_EMAIL_TO.split(',') : []);
+
+  if (toList.length === 0) {
+    console.log('Email notification skipped (no recipients)');
     return;
   }
   
   try {
     const msg = {
-      to: process.env.NOTIFICATION_EMAIL_TO.split(','), // Can send to multiple emails
+      to: toList,
       from: process.env.NOTIFICATION_EMAIL_FROM || 'notifications@surgicalforms.com',
       subject: subject,
       html: message,
@@ -509,6 +544,103 @@ async function sendSMSNotification(message) {
     console.log('✅ SMS notification sent');
   } catch (error) {
     console.error('❌ SMS notification failed:', error.message);
+  }
+}
+
+// Resolve notification recipients for RSA document expiry reminders
+async function getDocumentReminderRecipients(userId) {
+  const recipients = new Set();
+
+  // RSA owner email from rsa_emails table
+  const ownerEmailResult = await pool.query(
+    `SELECT re.email
+     FROM users u
+     JOIN rsa_emails re ON LOWER(TRIM(re.rsa_name)) = LOWER(TRIM(u.fullname))
+     WHERE u.id = $1
+     LIMIT 1`,
+    [userId]
+  );
+  if (ownerEmailResult.rows[0]?.email) {
+    recipients.add(ownerEmailResult.rows[0].email.trim());
+  }
+
+  // Scheduler and Business Assistant emails
+  const roleEmailResult = await pool.query(
+    `SELECT DISTINCT re.email
+     FROM users u
+     JOIN rsa_emails re ON LOWER(TRIM(re.rsa_name)) = LOWER(TRIM(u.fullname))
+     WHERE u.role IN ('Scheduler', 'Business Assistant')`
+  );
+  for (const row of roleEmailResult.rows) {
+    if (row.email) recipients.add(String(row.email).trim());
+  }
+
+  // Optional fallback recipients from env
+  if (process.env.NOTIFICATION_EMAIL_TO) {
+    for (const email of process.env.NOTIFICATION_EMAIL_TO.split(',')) {
+      if (email && email.trim()) recipients.add(email.trim());
+    }
+  }
+
+  return Array.from(recipients);
+}
+
+async function checkDocumentExpiryNotifications() {
+  if (!process.env.SENDGRID_API_KEY) {
+    return;
+  }
+  try {
+    const docsResult = await pool.query(
+      `SELECT d.id, d.user_id, d.document_type, d.issue_date, d.expiry_date, d.file_url, u.fullname
+       FROM rsa_documents d
+       JOIN users u ON u.id = d.user_id
+       WHERE d.expiry_date IS NOT NULL`
+    );
+
+    for (const doc of docsResult.rows) {
+      const now = new Date();
+      const expiry = new Date(`${doc.expiry_date}T00:00:00`);
+      const diffMs = expiry.getTime() - now.getTime();
+      const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      let notificationType = null;
+      if (daysUntilExpiry <= 90 && daysUntilExpiry > 30) {
+        notificationType = '3_month';
+      } else if (daysUntilExpiry <= 30 && daysUntilExpiry >= 0) {
+        notificationType = '1_month';
+      }
+      if (!notificationType) continue;
+
+      const alreadySent = await pool.query(
+        'SELECT 1 FROM rsa_document_notifications WHERE document_id = $1 AND notification_type = $2',
+        [doc.id, notificationType]
+      );
+      if (alreadySent.rows.length > 0) continue;
+
+      const recipients = await getDocumentReminderRecipients(doc.user_id);
+      if (recipients.length === 0) continue;
+
+      const timingText = notificationType === '3_month' ? 'within 3 months' : 'within 1 month';
+      const subject = `Document Expiry Reminder: ${doc.document_type} (${doc.fullname})`;
+      const message = `
+        <h2>Document Expiry Reminder</h2>
+        <p>A submitted RSA document is expiring ${timingText}.</p>
+        <p><strong>RSA:</strong> ${escapeHtml(doc.fullname)}</p>
+        <p><strong>Document:</strong> ${escapeHtml(doc.document_type)}</p>
+        <p><strong>Issue Date:</strong> ${escapeHtml(String(doc.issue_date || ''))}</p>
+        <p><strong>Expiry Date:</strong> ${escapeHtml(String(doc.expiry_date || ''))}</p>
+        <p><strong>Days Remaining:</strong> ${daysUntilExpiry}</p>
+        <p><a href="${escapeHtml(doc.file_url)}" target="_blank" rel="noopener noreferrer">View Document</a></p>
+      `;
+
+      await sendEmailNotification(subject, message, recipients);
+      await pool.query(
+        'INSERT INTO rsa_document_notifications (document_id, notification_type) VALUES ($1, $2) ON CONFLICT (document_id, notification_type) DO NOTHING',
+        [doc.id, notificationType]
+      );
+    }
+  } catch (err) {
+    console.error('Document expiry reminder check failed:', err.message);
   }
 }
 
@@ -1602,6 +1734,170 @@ app.delete('/api/rsa-emails/:id', requireRole('Business Assistant', 'Scheduler')
   }
 });
 
+// ========== RSA DOCUMENTS ENDPOINTS ==========
+app.get('/api/rsa-documents', requireRole('Admin', 'Business Assistant', 'Scheduler', 'Team Leader', 'Registered Surgical Assistant'), async (req, res) => {
+  try {
+    let query = `
+      SELECT d.*, u.fullname
+      FROM rsa_documents d
+      JOIN users u ON u.id = d.user_id
+    `;
+    const params = [];
+
+    if (req.user.role === 'Registered Surgical Assistant' || req.user.role === 'Team Leader') {
+      query += ' WHERE d.user_id = $1';
+      params.push(req.user.id);
+    } else if (req.query.userId) {
+      query += ' WHERE d.user_id = $1';
+      params.push(Number(req.query.userId));
+    }
+
+    query += ' ORDER BY d.expiry_date ASC, d.id DESC';
+    const result = await pool.query(query, params);
+
+    res.json(result.rows.map(d => ({
+      id: d.id,
+      userId: d.user_id,
+      userFullName: d.fullname,
+      documentType: d.document_type,
+      issueDate: d.issue_date,
+      expiryDate: d.expiry_date,
+      fileUrl: d.file_url,
+      originalFileName: d.original_file_name,
+      createdAt: d.createdat,
+      lastModified: d.lastmodified,
+    })));
+  } catch (err) {
+    console.error('RSA documents list error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/rsa-documents', requireRole('Admin', 'Business Assistant', 'Scheduler', 'Team Leader', 'Registered Surgical Assistant'), upload.single('documentFile'), async (req, res) => {
+  const { documentType, issueDate, expiryDate, userId } = req.body;
+  if (!documentType || !issueDate || !expiryDate) {
+    return res.status(400).json({ error: 'documentType, issueDate and expiryDate are required.' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'Document file is required.' });
+  }
+
+  try {
+    if (!validateFileMagicBytes(req.file.buffer, req.file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid or corrupted file upload.' });
+    }
+
+    const ownerUserId = (req.user.role === 'Registered Surgical Assistant' || req.user.role === 'Team Leader')
+      ? req.user.id
+      : Number(userId || req.user.id);
+
+    const fileUrl = await uploadToBlob(req.file);
+    const result = await pool.query(
+      `INSERT INTO rsa_documents (user_id, document_type, issue_date, expiry_date, file_url, original_file_name)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [ownerUserId, documentType, issueDate, expiryDate, fileUrl, req.file.originalname || '']
+    );
+
+    logAudit('RSA_DOCUMENT_CREATED', req.user.username, {
+      documentId: result.rows[0].id,
+      ownerUserId,
+      documentType,
+      expiryDate
+    });
+
+    res.status(201).json({
+      id: result.rows[0].id,
+      userId: result.rows[0].user_id,
+      documentType: result.rows[0].document_type,
+      issueDate: result.rows[0].issue_date,
+      expiryDate: result.rows[0].expiry_date,
+      fileUrl: result.rows[0].file_url,
+      originalFileName: result.rows[0].original_file_name,
+      createdAt: result.rows[0].createdat,
+      lastModified: result.rows[0].lastmodified,
+    });
+  } catch (err) {
+    console.error('RSA document create error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/rsa-documents/:id', requireRole('Admin', 'Business Assistant', 'Scheduler', 'Team Leader', 'Registered Surgical Assistant'), upload.single('documentFile'), async (req, res) => {
+  const { documentType, issueDate, expiryDate } = req.body;
+  if (!documentType || !issueDate || !expiryDate) {
+    return res.status(400).json({ error: 'documentType, issueDate and expiryDate are required.' });
+  }
+
+  try {
+    const existing = await pool.query('SELECT * FROM rsa_documents WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
+
+    const row = existing.rows[0];
+    if ((req.user.role === 'Registered Surgical Assistant' || req.user.role === 'Team Leader') && Number(row.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    let fileUrl = row.file_url;
+    let originalFileName = row.original_file_name;
+    if (req.file) {
+      if (!validateFileMagicBytes(req.file.buffer, req.file.mimetype)) {
+        return res.status(400).json({ error: 'Invalid or corrupted file upload.' });
+      }
+      fileUrl = await uploadToBlob(req.file);
+      originalFileName = req.file.originalname || originalFileName;
+    }
+
+    const result = await pool.query(
+      `UPDATE rsa_documents
+       SET document_type = $1, issue_date = $2, expiry_date = $3, file_url = $4, original_file_name = $5, lastmodified = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [documentType, issueDate, expiryDate, fileUrl, originalFileName, req.params.id]
+    );
+
+    logAudit('RSA_DOCUMENT_UPDATED', req.user.username, {
+      documentId: req.params.id,
+      documentType,
+      expiryDate
+    });
+
+    res.json({
+      id: result.rows[0].id,
+      userId: result.rows[0].user_id,
+      documentType: result.rows[0].document_type,
+      issueDate: result.rows[0].issue_date,
+      expiryDate: result.rows[0].expiry_date,
+      fileUrl: result.rows[0].file_url,
+      originalFileName: result.rows[0].original_file_name,
+      createdAt: result.rows[0].createdat,
+      lastModified: result.rows[0].lastmodified,
+    });
+  } catch (err) {
+    console.error('RSA document update error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/rsa-documents/:id', requireRole('Admin', 'Business Assistant', 'Scheduler', 'Team Leader', 'Registered Surgical Assistant'), async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT * FROM rsa_documents WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
+
+    const row = existing.rows[0];
+    if ((req.user.role === 'Registered Surgical Assistant' || req.user.role === 'Team Leader') && Number(row.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    await pool.query('DELETE FROM rsa_documents WHERE id = $1', [req.params.id]);
+    logAudit('RSA_DOCUMENT_DELETED', req.user.username, { documentId: req.params.id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('RSA document delete error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // ========== INVOICES ENDPOINTS ==========
 app.get('/api/invoices', requireRole('Business Assistant'), async (req, res) => {
   try {
@@ -2481,6 +2777,12 @@ app.listen(PORT, () => {
   // Run once on startup after a short delay
   setTimeout(checkAndSendReminders, 10 * 1000);
   console.log('Surgery reminder checker started (checks every 5 minutes)');
+
+  // Start RSA document expiry checker (runs every 6 hours)
+  setInterval(checkDocumentExpiryNotifications, 6 * 60 * 60 * 1000);
+  // Run once shortly after startup
+  setTimeout(checkDocumentExpiryNotifications, 20 * 1000);
+  console.log('RSA document expiry checker started (checks every 6 hours)');
 
   // Log all registered routes for debugging
   if (app._router && app._router.stack) {
